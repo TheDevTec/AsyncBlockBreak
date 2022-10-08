@@ -28,26 +28,17 @@ import me.devtec.theapi.bukkit.BukkitLoader;
 import me.devtec.theapi.bukkit.game.Position;
 import net.minecraft.core.BlockPosition;
 import net.minecraft.core.EnumDirection;
-import net.minecraft.network.chat.IChatBaseComponent;
 import net.minecraft.network.protocol.game.ClientboundBlockChangedAckPacket;
 import net.minecraft.network.protocol.game.PacketPlayInBlockDig;
 import net.minecraft.network.protocol.game.PacketPlayInBlockDig.EnumPlayerDigType;
 import net.minecraft.network.protocol.game.PacketPlayOutBlockChange;
-import net.minecraft.network.protocol.game.PacketPlayOutKickDisconnect;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.EntityPlayer;
 import net.minecraft.world.EnumHand;
 import net.minecraft.world.item.enchantment.EnchantmentDurability;
 import net.minecraft.world.item.enchantment.EnchantmentManager;
 import net.minecraft.world.item.enchantment.Enchantments;
-import net.minecraft.world.level.block.ITileEntity;
-import net.minecraft.world.level.block.entity.TileEntity;
-import net.minecraft.world.level.block.entity.TileEntityBeacon;
-import net.minecraft.world.level.block.entity.TileEntityBeehive;
 import net.minecraft.world.level.block.entity.TileEntityChest;
-import net.minecraft.world.level.block.entity.TileEntityCommand;
-import net.minecraft.world.level.block.entity.TileEntityContainer;
-import net.minecraft.world.level.block.entity.TileEntityMobSpawner;
 import net.minecraft.world.level.block.state.IBlockData;
 import net.minecraft.world.level.block.state.properties.BlockProperties;
 import net.minecraft.world.level.block.state.properties.BlockPropertyBedPart;
@@ -57,22 +48,17 @@ import net.minecraft.world.level.block.state.properties.IBlockState;
 import net.minecraft.world.level.chunk.Chunk;
 
 public class v1_19_R1 implements BlockDestroyHandler {
-	static IBlockState<EnumDirection> direction;
+	static IBlockState<EnumDirection> direction = BlockProperties.S;
 	static IBlockState<BlockPropertyBedPart> bedpart = BlockProperties.bc;
 	static IBlockState<BlockPropertyDoubleBlockHalf> doubleHalf = BlockProperties.ae;
 	static IBlockState<BlockPropertyChestType> chestType = BlockProperties.bd;
 	// vines
-	static IBlockState<Boolean> east, north, south, west, up;
+	static IBlockState<Boolean> east = BlockProperties.N, north = BlockProperties.M, south = BlockProperties.O, west = BlockProperties.P, up = BlockProperties.K;
+	static Field async = Ref.field(Event.class, "async");
 
-	@SuppressWarnings("unchecked")
 	private void destroyAround(Material blockType, Position pos, Player player, LootTable items, boolean dropItems) {
 		// FIX PLANT
-		if (blockType == Material.KELP || blockType == Material.KELP_PLANT)
-			fixPlant(pos, Material.KELP_PLANT, Material.KELP, Material.KELP);
-		else if (blockType == Material.TWISTING_VINES || blockType == Material.TWISTING_VINES_PLANT)
-			fixPlant(pos, Material.TWISTING_VINES, Material.TWISTING_VINES_PLANT, Material.TWISTING_VINES);
-		else if (blockType == Material.WEEPING_VINES || blockType == Material.WEEPING_VINES_PLANT)
-			fixPlant(pos, Material.WEEPING_VINES, Material.WEEPING_VINES_PLANT, Material.WEEPING_VINES);
+		fixPlantIfType(pos, blockType);
 
 		// top
 		Position clone = pos.clone().add(0, 1, 0);
@@ -123,10 +109,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					destroyAround(type, clone, player, items, dropItems);
 			} else if (!type.isSolid() && !type.isAir() && type != Material.WATER && type != Material.LAVA)
 				if (type.name().contains("WALL_")) {
-					if (direction == null)
-						for (IBlockState<?> s : blockData.v())
-							if (s.f().equals("facing"))
-								direction = (IBlockState<EnumDirection>) s;
 					BlockFace bface = BlockFace.valueOf(blockData.c(direction).name());
 					if (clone.getBlockX() - bface.getModX() == pos.getBlockX() && clone.getBlockZ() - bface.getModZ() == pos.getBlockZ()) {
 						if (dropItems)
@@ -134,32 +116,13 @@ public class v1_19_R1 implements BlockDestroyHandler {
 								items.add(item);
 						removeBlock(clone, isWaterlogged(blockData));
 					}
-				} else if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN) {
-					if (direction == null)
-						for (IBlockState<?> s : blockData.v())
-							if (s.f().equals("facing"))
-								direction = (IBlockState<EnumDirection>) s;
-					if (up == null || east == null || north == null || south == null || west == null)
-						for (IBlockState<?> s : blockData.v()) {
-							if (s.f().equals("east"))
-								east = (IBlockState<Boolean>) s;
-							if (s.f().equals("north"))
-								north = (IBlockState<Boolean>) s;
-							if (s.f().equals("south"))
-								south = (IBlockState<Boolean>) s;
-							if (s.f().equals("west"))
-								west = (IBlockState<Boolean>) s;
-							if (s.f().equals("up"))
-								up = (IBlockState<Boolean>) s;
-						}
-					if (!blockBehindOrAbove(clone, blockData)) {
-						removeBlock(clone, isWaterlogged(blockData));
-						clone.setY(clone.getY() - 1);
-						blockData = (IBlockData) clone.getIBlockData();
-						type = blockData.getBukkitMaterial();
-						if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN)
-							destroyVine(clone, blockData);
-					}
+				} else if ((type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN) && !blockBehindOrAbove(clone, blockData)) {
+					removeBlock(clone, isWaterlogged(blockData));
+					clone.setY(clone.getY() - 1);
+					blockData = (IBlockData) clone.getIBlockData();
+					type = blockData.getBukkitMaterial();
+					if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN)
+						destroyVine(clone, blockData);
 				}
 		}
 
@@ -176,19 +139,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				if (type == Material.CHORUS_PLANT)
 					destroyAround(type, clone, player, items, dropItems);
 			} else if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN) {
-				if (up == null || east == null || north == null || south == null || west == null)
-					for (IBlockState<?> s : blockData.v()) {
-						if (s.f().equals("east"))
-							east = (IBlockState<Boolean>) s;
-						if (s.f().equals("north"))
-							north = (IBlockState<Boolean>) s;
-						if (s.f().equals("south"))
-							south = (IBlockState<Boolean>) s;
-						if (s.f().equals("west"))
-							west = (IBlockState<Boolean>) s;
-						if (s.f().equals("up"))
-							up = (IBlockState<Boolean>) s;
-					}
 				if (!blockBehindOrAbove(clone, blockData)) {
 					removeBlock(clone, isWaterlogged(blockData));
 					clone.setY(clone.getY() - 1);
@@ -235,14 +185,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			destroyVine(pos, blockData);
 	}
 
-	@SuppressWarnings("unchecked")
 	private static void destroyBed(Player player, Position clone, IBlockData blockData, LootTable items, boolean dropItems) {
 		clone.setAirAndUpdate(false);
-		if (direction == null)
-			for (IBlockState<?> s : blockData.v())
-				if (s.f().equals("facing"))
-					direction = (IBlockState<EnumDirection>) s;
-
 		BlockFace face = BlockFace.valueOf(blockData.c(direction).name());
 		if (blockData.c(bedpart).name().equals("HEAD"))
 			clone.add(face.getOppositeFace().getModX(), 0, face.getOppositeFace().getModZ());
@@ -255,22 +199,12 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		clone.setAirAndUpdate(false);
 	}
 
-	@SuppressWarnings("unchecked")
 	private void destroyChest(Player player, Position pos, IBlockData iblockdata, LootTable items, boolean dropItems) {
-		if (direction == null)
-			for (IBlockState<?> s : iblockdata.v())
-				if (s.f().equals("facing"))
-					direction = (IBlockState<EnumDirection>) s;
-
 		BlockPropertyChestType chesttype = iblockdata.c(chestType);
 		BlockFace face = BlockFace.valueOf(iblockdata.c(direction).name());
-		BlockPosition blockPos = (BlockPosition) pos.getBlockPosition();
-		Chunk chunk = (Chunk) pos.getNMSChunk();
-		TileEntityChest tile = (TileEntityChest) ((Chunk) pos.getNMSChunk()).getTileEntityImmediately(blockPos);
 		if (dropItems || !Loader.DISABLE_TILE_DROPS)
-			for (net.minecraft.world.item.ItemStack nmsItem : tile.getContents())
+			for (net.minecraft.world.item.ItemStack nmsItem : ((TileEntityChest) ((Chunk) pos.getNMSChunk()).getTileEntityImmediately((BlockPosition) pos.getBlockPosition())).getContents())
 				items.add(CraftItemStack.asBukkitCopy(nmsItem));
-		chunk.d(blockPos);
 		removeBlock(pos, isWaterlogged(iblockdata));
 
 		if (chesttype == BlockPropertyChestType.c) {
@@ -295,7 +229,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			if (data.getBukkitMaterial() == Material.CHEST | data.getBukkitMaterial() == Material.TRAPPED_CHEST) {
 				data = data.a(chestType, BlockPropertyChestType.a);
 				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), data);
-				BukkitLoader.getPacketHandler().send(BukkitLoader.getOnlinePlayers(), new PacketPlayOutBlockChange((BlockPosition) clone.getBlockPosition(), data));
+				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), new PacketPlayOutBlockChange((BlockPosition) clone.getBlockPosition(), data));
 				Position.updateLightAt(clone);
 			}
 		} else if (chesttype == BlockPropertyChestType.b) {
@@ -320,24 +254,18 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			if (data.getBukkitMaterial() == Material.CHEST | data.getBukkitMaterial() == Material.TRAPPED_CHEST) {
 				data = data.a(chestType, BlockPropertyChestType.a);
 				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), data);
-				BukkitLoader.getPacketHandler().send(BukkitLoader.getOnlinePlayers(), new PacketPlayOutBlockChange((BlockPosition) clone.getBlockPosition(), data));
+				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), new PacketPlayOutBlockChange((BlockPosition) clone.getBlockPosition(), data));
 				Position.updateLightAt(clone);
 			}
 		}
 	}
 
-	@SuppressWarnings("unchecked")
 	private void destroyDoubleBlock(boolean water, Player player, Position pos, IBlockData iblockdata, LootTable items, boolean dropItems) {
 		if (dropItems)
 			for (ItemStack item : pos.getBlock().getDrops())
 				items.add(item);
 		removeBlock(pos, water);
-
-		if (doubleHalf == null)
-			for (IBlockState<?> s : iblockdata.v())
-				if (s.f().equals("half"))
-					doubleHalf = (IBlockState<BlockPropertyDoubleBlockHalf>) s;
-		if (iblockdata.c(doubleHalf).name().equals("LOWER")) {
+		if (iblockdata.c(doubleHalf) == BlockPropertyDoubleBlockHalf.a) {
 			Position clone = pos.clone().add(0, 1, 0);
 			if (dropItems)
 				for (ItemStack item : clone.getBlock().getDrops())
@@ -353,8 +281,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	}
 
 	public void breakBlock(Player player, Position pos, IBlockData iblockdata, EntityPlayer nmsPlayer, PacketPlayInBlockDig packet, AsyncBlockBreakEvent breakEvent) {
-		BlockPosition blockPos = packet.b();
-
 		LootTable loot = new LootTable();
 		// Add loot from block to the LootTable
 		if (breakEvent.isDropItems())
@@ -370,28 +296,12 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		else if (isBed(material))
 			destroyBed(player, pos, iblockdata, loot, breakEvent.isDropItems());
 		else {
-			boolean pass = true;
-			if (iblockdata.b() instanceof ITileEntity) {
-				pass = false; // don't do useless check
-				Chunk chunk = (Chunk) pos.getNMSChunk();
-				TileEntity tilet = chunk.getTileEntityImmediately(blockPos);
-				if (tilet instanceof TileEntityContainer) {
-					TileEntityContainer tile = (TileEntityContainer) tilet;
-					if (breakEvent.isDropItems() || !Loader.DISABLE_TILE_DROPS)
-						for (net.minecraft.world.item.ItemStack nmsItem : tile.getContents())
-							loot.add(CraftItemStack.asBukkitCopy(nmsItem));
-					chunk.d(blockPos);
-					chunk.q.capturedTileEntities.remove(blockPos);
-					pass = true;
-				} else
-					pass = tilet instanceof TileEntityMobSpawner || tilet instanceof TileEntityBeacon || tilet instanceof TileEntityCommand || tilet instanceof TileEntityBeehive;
-			}
 			if (isWaterlogged(iblockdata))
 				pos.setTypeAndUpdate(Material.WATER, true);
 			else
 				pos.setAirAndUpdate(true);
 
-			if (pass)
+			if (!material.isSolid() && !material.isAir() && !material.name().contains("WALL_"))
 				destroyAround(material, pos, player, loot, breakEvent.isDropItems());
 		}
 		BukkitLoader.getPacketHandler().send(player, new ClientboundBlockChangedAckPacket(packet.e())); // Finish BlockBreak packet
@@ -424,15 +334,14 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					});
 			});
 		// Damage tool
-		int damage = damageTool(nmsPlayer, nmsPlayer.b(EnumHand.a), nmsPlayer.b(EnumHand.a).u.q("Unbreakable") ? 0 : 1);
+		net.minecraft.world.item.ItemStack itemInHand = nmsPlayer.b(EnumHand.a);
+		int damage = damageTool(nmsPlayer, itemInHand, itemInHand.u != null && itemInHand.u.q("Unbreakable") ? 0 : 1);
 		if (damage > 0)
-			if (nmsPlayer.b(EnumHand.a).j() + damage == nmsPlayer.b(EnumHand.a).k())
-				player.setItemInHand(null);
+			if (itemInHand.j() + damage == itemInHand.k())
+				nmsPlayer.a(EnumHand.a, net.minecraft.world.item.ItemStack.b);
 			else
-				nmsPlayer.b(EnumHand.a).b(nmsPlayer.b(EnumHand.a).j() + damage);
+				itemInHand.b(itemInHand.j() + damage);
 	}
-
-	private static final Field async = Ref.field(Event.class, "async");
 
 	private int damageTool(EntityPlayer player, net.minecraft.world.item.ItemStack item, int damage) {
 		int enchant = EnchantmentManager.a(Enchantments.w, item);
@@ -450,10 +359,12 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		return event.getDamage();
 	}
 
-	private void processBlockBreak(PacketPlayInBlockDig packet, Player player, EntityPlayer nmsPlayer, IBlockData iblockdata, BlockPosition blockPos, Position pos, boolean cancelDrop,
+	private void processBlockBreak(PacketPlayInBlockDig packet, Player player, EntityPlayer nmsPlayer, IBlockData iblockdata, BlockPosition blockPos, Position pos, boolean creativeOrSpectator,
 			boolean instantlyBroken) {
 		AsyncBlockBreakEvent event = new AsyncBlockBreakEvent(pos.getBlock(), player, BukkitLoader.getNmsProvider().toMaterial(iblockdata), instantlyBroken, BlockFace.valueOf(packet.c().name()));
-		event.setDropItems(cancelDrop);
+		event.setDropItems(creativeOrSpectator);
+
+		// Drop exp only in survival / adventure gamemode
 		if (player.getGameMode() == GameMode.ADVENTURE || player.getGameMode() == GameMode.SURVIVAL)
 			if (nmsPlayer.d(iblockdata.b().m()))
 				event.setExpToDrop(iblockdata.b().getExpDrop(iblockdata, nmsPlayer.x(), blockPos, CraftItemStack.asNMSCopy(player.getItemInHand()), true));
@@ -488,46 +399,10 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		}
 	}
 
-	private boolean isInvalid(Player player, Position pos) {
-		return !player.isOnline() || !player.isValid() || player.isDead() || player.getHealth() <= 0 || Loader.kick.contains(player.getUniqueId()) || invalidRange(player.getLocation(), player, pos);
-	}
-
-	private boolean invalidRange(Location location, Player player, Position pos) {
-		double radius = pos.distance(location);
-		if (radius > Loader.MAXIMUM_RADIUS_WITHIN_BLOCK_AND_PLAYER) {
-			if (Loader.KICK_PLAYER) {
-				Loader.kick.add(player.getUniqueId());
-				BukkitLoader.getPacketHandler().send(player, new PacketPlayOutKickDisconnect(IChatBaseComponent.a("Destroyed block at too far distance (Hacking?)")));
-			}
-			announce("Player " + player.getName() + "[" + player.getUniqueId() + "] destroyed a block at too far a distance (" + radius + ") (Hacking?)");
-			return true;
-		}
-		int destroyedBlocks = Loader.destroyedCountInTick.getOrDefault(player.getUniqueId(), 0) + 1;
-		if (destroyedBlocks > Loader.DESTROYED_BLOCKS_LIMIT) {
-			if (Loader.KICK_PLAYER) {
-				Loader.kick.add(player.getUniqueId());
-				BukkitLoader.getPacketHandler().send(player, new PacketPlayOutKickDisconnect(IChatBaseComponent.a("Too many blocks destroyed in one server tick (Hacking?)")));
-			}
-			announce("Player " + player.getName() + "[" + player.getUniqueId() + "] destroyed too many blocks (" + destroyedBlocks + ") in one server tick (Hacking?)");
-			return true;
-		}
-		Loader.destroyedCountInTick.put(player.getUniqueId(), destroyedBlocks);
-		return false;
-	}
-
-	private void announce(String text) {
-		if (Loader.BROADCAST_CONSOLE)
-			Bukkit.getConsoleSender().sendMessage(text);
-		if (Loader.BROADCAST_ADMINS)
-			for (Player player : Bukkit.getOnlinePlayers())
-				if (player.hasPermission("asyncblockbreak.anticheat"))
-					player.sendMessage(text);
-	}
-
 	@Override
 	public boolean handle(String playerName, Object packetObject) {
 		PacketPlayInBlockDig packet = (PacketPlayInBlockDig) packetObject;
-		if (packet.d() == EnumPlayerDigType.c) { // destoy
+		if (packet.d() == EnumPlayerDigType.c) { // stop
 			BlockPosition blockPos = packet.b();
 			Player player = Bukkit.getPlayer(playerName);
 			Position pos = new Position(player.getWorld(), blockPos.u(), blockPos.v(), blockPos.w());

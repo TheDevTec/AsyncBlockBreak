@@ -1,9 +1,16 @@
 package me.devtec.asyncblockbreak.utils;
 
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.BlockFace;
+import org.bukkit.entity.Player;
 
+import me.devtec.asyncblockbreak.Loader;
+import me.devtec.theapi.bukkit.BukkitLoader;
 import me.devtec.theapi.bukkit.game.Position;
+import net.minecraft.network.chat.IChatBaseComponent;
+import net.minecraft.network.protocol.game.PacketPlayOutKickDisconnect;
 
 public interface BlockDestroyHandler {
 
@@ -35,10 +42,55 @@ public interface BlockDestroyHandler {
 			clone.setAirAndUpdate(false);
 	}
 
+	default void fixPlantIfType(Position pos, Material blockType) {
+		if (blockType == Material.KELP || blockType == Material.KELP_PLANT)
+			fixPlant(pos, Material.KELP_PLANT, Material.KELP, Material.KELP);
+		else if (blockType == Material.TWISTING_VINES || blockType == Material.TWISTING_VINES_PLANT)
+			fixPlant(pos, Material.TWISTING_VINES, Material.TWISTING_VINES_PLANT, Material.TWISTING_VINES);
+		else if (blockType == Material.WEEPING_VINES || blockType == Material.WEEPING_VINES_PLANT)
+			fixPlant(pos, Material.WEEPING_VINES, Material.WEEPING_VINES_PLANT, Material.WEEPING_VINES);
+	}
+
 	default void fixPlant(Position pos, Material thisOne, Material orThisOne, Material replacement) {
 		Position clone2 = pos.clone().add(0, -1, 0);
 		Material type = clone2.getBukkitType();
 		if (type == thisOne || type == orThisOne)
 			clone2.setTypeAndUpdate(replacement, false);
+	}
+
+	default boolean isInvalid(Player player, Position pos) {
+		return !player.isOnline() || !player.isValid() || player.isDead() || player.getHealth() <= 0 || Loader.kick.contains(player.getUniqueId()) || invalidRange(player.getLocation(), player, pos);
+	}
+
+	default boolean invalidRange(Location location, Player player, Position pos) {
+		double radius = pos.distance(location);
+		if (radius > Loader.MAXIMUM_RADIUS_WITHIN_BLOCK_AND_PLAYER) {
+			if (Loader.KICK_PLAYER) {
+				Loader.kick.add(player.getUniqueId());
+				BukkitLoader.getPacketHandler().send(player, new PacketPlayOutKickDisconnect(IChatBaseComponent.a("Destroyed block at too far distance (Hacking?)")));
+			}
+			announce("Player " + player.getName() + "[" + player.getUniqueId() + "] destroyed a block at too far a distance (" + radius + ") (Hacking?)");
+			return true;
+		}
+		int destroyedBlocks = Loader.destroyedCountInTick.getOrDefault(player.getUniqueId(), 0) + 1;
+		if (destroyedBlocks > Loader.DESTROYED_BLOCKS_LIMIT) {
+			if (Loader.KICK_PLAYER) {
+				Loader.kick.add(player.getUniqueId());
+				BukkitLoader.getPacketHandler().send(player, new PacketPlayOutKickDisconnect(IChatBaseComponent.a("Too many blocks destroyed in one server tick (Hacking?)")));
+			}
+			announce("Player " + player.getName() + "[" + player.getUniqueId() + "] destroyed too many blocks (" + destroyedBlocks + ") in one server tick (Hacking?)");
+			return true;
+		}
+		Loader.destroyedCountInTick.put(player.getUniqueId(), destroyedBlocks);
+		return false;
+	}
+
+	default void announce(String text) {
+		if (Loader.BROADCAST_CONSOLE)
+			Bukkit.getConsoleSender().sendMessage(text);
+		if (Loader.BROADCAST_ADMINS)
+			for (Player player : Bukkit.getOnlinePlayers())
+				if (player.hasPermission("asyncblockbreak.anticheat"))
+					player.sendMessage(text);
 	}
 }

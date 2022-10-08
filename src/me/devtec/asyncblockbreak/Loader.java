@@ -93,6 +93,7 @@ public class Loader extends JavaPlugin implements Listener {
 
 	@Override
 	public void onDisable() {
-		listener.unregister();
+		if (listener != null)
+			listener.unregister();
 	}
 }

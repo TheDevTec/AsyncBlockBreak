@@ -30,7 +30,7 @@ public class Loader extends JavaPlugin implements Listener {
 
 	public static Map<UUID, Integer> destroyedCountInTick = new ConcurrentHashMap<>();
 	public static List<UUID> kick = new ArrayList<>();
-	public static BlockDestroyHandler handler;
+	private BlockDestroyHandler handler;
 	private PacketListener listener;
 
 	@EventHandler

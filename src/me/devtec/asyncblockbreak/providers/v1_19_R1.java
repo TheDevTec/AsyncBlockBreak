@@ -24,7 +24,6 @@ import me.devtec.asyncblockbreak.events.AsyncBlockBreakEvent;
 import me.devtec.asyncblockbreak.events.BlockBreakDropItemsEvent;
 import me.devtec.asyncblockbreak.utils.BlockDestroyHandler;
 import me.devtec.shared.Ref;
-import me.devtec.shared.scheduler.Tasker;
 import me.devtec.theapi.bukkit.BukkitLoader;
 import me.devtec.theapi.bukkit.game.Position;
 import net.minecraft.core.BlockPosition;
@@ -306,7 +305,17 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			if (!material.isSolid() && !material.isAir() && !material.name().contains("WALL_"))
 				destroyAround(material, pos, player, loot, breakEvent.isDropItems());
 		}
-		BukkitLoader.getPacketHandler().send(player, new ClientboundBlockChangedAckPacket(packet.e())); // Finish BlockBreak packet
+		// Damage tool
+		net.minecraft.world.item.ItemStack itemInHand = nmsPlayer.b(EnumHand.a);
+		int damage = damageTool(nmsPlayer, itemInHand, itemInHand.u != null && itemInHand.u.q("Unbreakable") ? 0 : 1);
+		if (damage > 0)
+			if (itemInHand.j() + damage >= CraftMagicNumbers.getMaterial(itemInHand.c()).getMaxDurability())
+				nmsPlayer.a(EnumHand.a, net.minecraft.world.item.ItemStack.b);
+			else
+				itemInHand.b(itemInHand.j() + damage);
+
+		// Packet response
+		BukkitLoader.getPacketHandler().send(player, new ClientboundBlockChangedAckPacket(packet.e()));
 
 		// Drop items & exp
 		Location dropLoc = pos.add(0.5, 0, 0.5).toLocation();
@@ -335,14 +344,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 						orb.setExperience(breakEvent.getExpToDrop());
 					});
 			});
-		// Damage tool
-		net.minecraft.world.item.ItemStack itemInHand = nmsPlayer.b(EnumHand.a);
-		int damage = damageTool(nmsPlayer, itemInHand, itemInHand.u != null && itemInHand.u.q("Unbreakable") ? 0 : 1);
-		if (damage > 0)
-			if (itemInHand.j() + damage >= CraftMagicNumbers.getMaterial(itemInHand.c()).getMaxDurability())
-				nmsPlayer.a(EnumHand.a, net.minecraft.world.item.ItemStack.b);
-			else
-				itemInHand.b(itemInHand.j() + damage);
 	}
 
 	private int damageTool(EntityPlayer player, net.minecraft.world.item.ItemStack item, int damage) {
@@ -352,7 +353,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			--damage;
 
 		PlayerItemDamageEvent event = new PlayerItemDamageEvent(player.getBukkitEntity(), CraftItemStack.asCraftMirror(item), damage);
-		Ref.set(event, async, true);
+		if (!Bukkit.isPrimaryThread())
+			Ref.set(event, async, true);
 		Bukkit.getPluginManager().callEvent(event);
 
 		if (event.isCancelled())
@@ -380,16 +382,11 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		if (Loader.SYNC_EVENT)
 			BukkitLoader.getNmsProvider().postToMainThread(() -> {
 				Bukkit.getPluginManager().callEvent(event);
-				new Tasker() {
-					@Override
-					public void run() {
-						if (event.isCancelled()) {
-							sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
-							return;
-						}
-						breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
-					}
-				}.runTask();
+				if (event.isCancelled()) {
+					sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
+					return;
+				}
+				breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
 			});
 		else {
 			Bukkit.getPluginManager().callEvent(event);

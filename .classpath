@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-16">
+		<attributes>
+			<attribute name="module" value="true"/>
+		</attributes>
+	</classpathentry>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="lib" path="D:/jars/mc/1.19_R1/authlib-3.3.39.jar"/>
+	<classpathentry kind="lib" path="D:/jars/mc/1.19_R1/brigadier-1.0.18.jar"/>
+	<classpathentry kind="lib" path="D:/jars/mc/1.19_R1/datafixerupper-4.1.27.jar"/>
+	<classpathentry kind="lib" path="D:/jars/mc/1.19_R1/fastutil-8.5.6.jar"/>
+	<classpathentry kind="lib" path="D:/jars/mc/1.19_R1/gson-2.8.9.jar"/>
+	<classpathentry kind="lib" path="D:/jars/mc/1.19_R1/guava-31.0.1-jre.jar"/>
+	<classpathentry kind="lib" path="D:/jars/mc/1.19_R1/jsr305-3.0.2.jar"/>
+	<classpathentry kind="lib" path="D:/jars/mc/1.19_R1/log4j-api-2.17.0.jar"/>
+	<classpathentry kind="lib" path="D:/jars/mc/1.19_R1/netty-all-4.1.68.Final.jar"/>
+	<classpathentry kind="lib" path="D:/jars/mc/1.19_R1/slf4j-api-1.8.0-beta4.jar"/>
+	<classpathentry kind="lib" path="D:/mc-servers/server/versions/1.19.2/paper-1.19.2.jar"/>
+	<classpathentry kind="lib" path="D:/jars/mc/1.19_R1/spigot-api-1.19-R0.1-SNAPSHOT.jar"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/Loader - Bukkit"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/Shared"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>

@@ -1,0 +1,19 @@
+settings:
+  # Disable drops from tile entities in the Creative mode (Chests, Hoppers..)
+  disable_tile_drops: false
+  # Sync BlockBreakEvent event with server to support other plugins
+  syncEvent: true
+
+anticheat:
+  # AntiCheat - Anti Nuke protection
+  # Maximum blocks destroyed in one tick
+  destroyed_blocks_limit: 3
+  # Maximum radius within player and block
+  max_radius_within_block_and_player: 6.4
+  
+  # Actions in case of rule violations
+  actions:
+    kick_player: true
+    broadcast_console: true
+    # Permission asyncblockbreak.anticheat
+    broadcast_admins: false

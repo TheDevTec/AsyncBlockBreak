@@ -1,5 +1,7 @@
 package me.devtec.asyncblockbreak.utils;
 
+import java.lang.reflect.Constructor;
+
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -7,13 +9,14 @@ import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Player;
 
 import me.devtec.asyncblockbreak.Loader;
+import me.devtec.shared.Ref;
+import me.devtec.shared.components.Component;
 import me.devtec.theapi.bukkit.BukkitLoader;
 import me.devtec.theapi.bukkit.game.Position;
-import net.minecraft.network.chat.IChatBaseComponent;
-import net.minecraft.network.protocol.game.PacketPlayOutKickDisconnect;
 
 public interface BlockDestroyHandler {
 
+	static Constructor<?> packetDisconnect = Ref.constructor(Ref.nms("network.protocol.game", "PacketPlayOutKickDisconnect"), Ref.nms("network.chat", "IChatBaseComponent"));
 	static BlockFace[] faces = { BlockFace.EAST, BlockFace.WEST, BlockFace.NORTH, BlockFace.SOUTH };
 
 	boolean handle(String player, Object packet);
@@ -67,7 +70,8 @@ public interface BlockDestroyHandler {
 		if (radius > Loader.MAXIMUM_RADIUS_WITHIN_BLOCK_AND_PLAYER) {
 			if (Loader.KICK_PLAYER) {
 				Loader.kick.add(player.getUniqueId());
-				BukkitLoader.getPacketHandler().send(player, new PacketPlayOutKickDisconnect(IChatBaseComponent.a("Destroyed block at too far distance (Hacking?)")));
+				BukkitLoader.getPacketHandler().send(player,
+						Ref.newInstance(packetDisconnect, BukkitLoader.getNmsProvider().toIChatBaseComponent(new Component("Destroyed block at too far distance (Hacking?)"))));
 			}
 			announce("Player " + player.getName() + "[" + player.getUniqueId() + "] destroyed a block at too far a distance (" + radius + ") (Hacking?)");
 			return true;
@@ -76,7 +80,8 @@ public interface BlockDestroyHandler {
 		if (destroyedBlocks > Loader.DESTROYED_BLOCKS_LIMIT) {
 			if (Loader.KICK_PLAYER) {
 				Loader.kick.add(player.getUniqueId());
-				BukkitLoader.getPacketHandler().send(player, new PacketPlayOutKickDisconnect(IChatBaseComponent.a("Too many blocks destroyed in one server tick (Hacking?)")));
+				BukkitLoader.getPacketHandler().send(player,
+						Ref.newInstance(packetDisconnect, BukkitLoader.getNmsProvider().toIChatBaseComponent(new Component("Too many blocks destroyed in one server tick (Hacking?)"))));
 			}
 			announce("Player " + player.getName() + "[" + player.getUniqueId() + "] destroyed too many blocks (" + destroyedBlocks + ") in one server tick (Hacking?)");
 			return true;

@@ -9,6 +9,7 @@ import org.bukkit.Material;
 import org.bukkit.block.BlockFace;
 import org.bukkit.craftbukkit.v1_19_R1.entity.CraftPlayer;
 import org.bukkit.craftbukkit.v1_19_R1.inventory.CraftItemStack;
+import org.bukkit.craftbukkit.v1_19_R1.util.CraftMagicNumbers;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.ExperienceOrb;
 import org.bukkit.entity.Player;
@@ -296,6 +297,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		else if (isBed(material))
 			destroyBed(player, pos, iblockdata, loot, breakEvent.isDropItems());
 		else {
+			// Set block to air/water & update nearby blocks
 			if (isWaterlogged(iblockdata))
 				pos.setTypeAndUpdate(Material.WATER, true);
 			else
@@ -337,7 +339,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		net.minecraft.world.item.ItemStack itemInHand = nmsPlayer.b(EnumHand.a);
 		int damage = damageTool(nmsPlayer, itemInHand, itemInHand.u != null && itemInHand.u.q("Unbreakable") ? 0 : 1);
 		if (damage > 0)
-			if (itemInHand.j() + damage == itemInHand.k())
+			if (itemInHand.j() + damage >= CraftMagicNumbers.getMaterial(itemInHand.c()).getMaxDurability())
 				nmsPlayer.a(EnumHand.a, net.minecraft.world.item.ItemStack.b);
 			else
 				itemInHand.b(itemInHand.j() + damage);

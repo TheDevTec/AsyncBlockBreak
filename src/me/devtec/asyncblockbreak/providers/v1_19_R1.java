@@ -285,6 +285,9 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			removeBlock(clone, water);
 		} else {
 			Position clone = pos.clone().add(0, -1, 0);
+			if (dropItems)
+				for (ItemStack item : clone.getBlock().getDrops())
+					items.add(item);
 			removeBlock(clone, water);
 		}
 	}

@@ -27,6 +27,7 @@ public class Loader extends JavaPlugin implements Listener {
 	public static boolean KICK_PLAYER;
 	public static boolean BROADCAST_CONSOLE;
 	public static boolean BROADCAST_ADMINS;
+	public static boolean TICK_LEAVES;
 
 	public static Map<UUID, Integer> destroyedCountInTick = new ConcurrentHashMap<>();
 	public static List<UUID> kick = new ArrayList<>();
@@ -89,6 +90,7 @@ public class Loader extends JavaPlugin implements Listener {
 		KICK_PLAYER = config.getBoolean("anticheat.actions.kick_player");
 		BROADCAST_CONSOLE = config.getBoolean("anticheat.actions.broadcast_console");
 		BROADCAST_ADMINS = config.getBoolean("anticheat.actions.broadcast_admins");
+		TICK_LEAVES = config.getBoolean("settings.tick_leaves");
 	}
 
 	@Override

@@ -3,6 +3,8 @@ settings:
   disable_tile_drops: false
   # Sync BlockBreakEvent event with server to support other plugins
   syncEvent: true
+  # If you disable this, all leaves will be persistent
+  tick_leaves: true
 
 anticheat:
   # AntiCheat - Anti Nuke protection

@@ -7,6 +7,7 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.BlockFace;
+import org.bukkit.craftbukkit.v1_19_R1.CraftWorld;
 import org.bukkit.craftbukkit.v1_19_R1.entity.CraftPlayer;
 import org.bukkit.craftbukkit.v1_19_R1.inventory.CraftItemStack;
 import org.bukkit.craftbukkit.v1_19_R1.util.CraftMagicNumbers;
@@ -38,6 +39,8 @@ import net.minecraft.world.EnumHand;
 import net.minecraft.world.item.enchantment.EnchantmentDurability;
 import net.minecraft.world.item.enchantment.EnchantmentManager;
 import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.block.BlockLeaves;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.TileEntityChest;
 import net.minecraft.world.level.block.state.IBlockData;
 import net.minecraft.world.level.block.state.properties.BlockProperties;
@@ -64,7 +67,12 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		Position clone = pos.clone().add(0, 1, 0);
 		IBlockData blockData = (IBlockData) clone.getIBlockData();
 		Material type = blockData.getBukkitMaterial();
-		if (!(type == Material.WATER || type == Material.LAVA))
+
+		if (type.name().endsWith("_LEAVES") && Loader.TICK_LEAVES) {
+			BlockLeaves c = (BlockLeaves) blockData.b();
+			c.a(blockData, EnumDirection.a((BlockPosition) pos.getBlockPosition()), Blocks.a.m(), ((CraftWorld) clone.getWorld()).getHandle(), (BlockPosition) clone.getBlockPosition(),
+					(BlockPosition) clone.getBlockPosition());
+		} else if (!(type == Material.WATER || type == Material.LAVA))
 			if (type == Material.CHORUS_PLANT || type == Material.CHORUS_FLOWER) {
 				if (dropItems)
 					for (ItemStack item : clone.getBlock().getDrops())
@@ -87,9 +95,12 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
 				}
 			} else if (!type.isSolid() && !type.isAir() && !type.name().contains("WALL_") && !(type == Material.WEEPING_VINES || type == Material.WEEPING_VINES_PLANT))
-				if (isDoubleBlock(type)) // plant or door
+				if (isDoubleBlock(type)) {// plant or door
+					if (dropItems)
+						for (ItemStack item : clone.getBlock().getDrops())
+							items.add(item);
 					destroyDoubleBlock(isWaterlogged(blockData), player, clone, blockData, items, dropItems);
-				else
+				} else
 					removeBlock(clone, isWaterlogged(blockData));
 
 		// sides
@@ -99,8 +110,11 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			type = blockData.getBukkitMaterial();
 			if (type == Material.WATER || type == Material.LAVA)
 				continue;
-
-			if (type == Material.CHORUS_PLANT || type == Material.CHORUS_FLOWER) {
+			if (type.name().endsWith("_LEAVES") && Loader.TICK_LEAVES) {
+				BlockLeaves c = (BlockLeaves) blockData.b();
+				c.a(blockData, EnumDirection.a((BlockPosition) pos.getBlockPosition()), Blocks.a.m(), ((CraftWorld) clone.getWorld()).getHandle(), (BlockPosition) clone.getBlockPosition(),
+						(BlockPosition) clone.getBlockPosition());
+			} else if (type == Material.CHORUS_PLANT || type == Material.CHORUS_FLOWER) {
 				if (dropItems)
 					for (ItemStack item : clone.getBlock().getDrops())
 						items.add(item);
@@ -130,7 +144,11 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		clone = pos.clone().add(0, -1, 0);
 		blockData = (IBlockData) clone.getIBlockData();
 		type = blockData.getBukkitMaterial();
-		if (!(type == Material.WATER || type == Material.LAVA))
+		if (type.name().endsWith("_LEAVES") && Loader.TICK_LEAVES) {
+			BlockLeaves c = (BlockLeaves) blockData.b();
+			c.a(blockData, EnumDirection.a((BlockPosition) pos.getBlockPosition()), Blocks.a.m(), ((CraftWorld) clone.getWorld()).getHandle(), (BlockPosition) clone.getBlockPosition(),
+					(BlockPosition) clone.getBlockPosition());
+		} else if (!(type == Material.WATER || type == Material.LAVA))
 			if (type == Material.CHORUS_PLANT || type == Material.CHORUS_FLOWER) {
 				if (dropItems)
 					for (ItemStack item : clone.getBlock().getDrops())
@@ -261,21 +279,12 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	}
 
 	private void destroyDoubleBlock(boolean water, Player player, Position pos, IBlockData iblockdata, LootTable items, boolean dropItems) {
-		if (dropItems)
-			for (ItemStack item : pos.getBlock().getDrops())
-				items.add(item);
 		removeBlock(pos, water);
-		if (iblockdata.c(doubleHalf) == BlockPropertyDoubleBlockHalf.a) {
+		if (iblockdata.c(doubleHalf) == BlockPropertyDoubleBlockHalf.b) {
 			Position clone = pos.clone().add(0, 1, 0);
-			if (dropItems)
-				for (ItemStack item : clone.getBlock().getDrops())
-					items.add(item);
 			removeBlock(clone, water);
 		} else {
 			Position clone = pos.clone().add(0, -1, 0);
-			if (dropItems)
-				for (ItemStack item : clone.getBlock().getDrops())
-					items.add(item);
 			removeBlock(clone, water);
 		}
 	}
@@ -301,26 +310,27 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				pos.setTypeAndUpdate(Material.WATER, true);
 			else
 				pos.setAirAndUpdate(true);
-
-			if (!material.isSolid() && !material.isAir() && !material.name().contains("WALL_"))
+			if (material.isSolid() && !material.isAir() && !material.name().contains("WALL_"))
 				destroyAround(material, pos, player, loot, breakEvent.isDropItems());
 		}
 		// Damage tool
 		net.minecraft.world.item.ItemStack itemInHand = nmsPlayer.b(EnumHand.a);
-		int damage = damageTool(nmsPlayer, itemInHand, itemInHand.u != null && itemInHand.u.q("Unbreakable") ? 0 : 1);
-		if (damage > 0)
-			if (itemInHand.j() + damage >= CraftMagicNumbers.getMaterial(itemInHand.c()).getMaxDurability())
-				nmsPlayer.a(EnumHand.a, net.minecraft.world.item.ItemStack.b);
-			else
-				itemInHand.b(itemInHand.j() + damage);
-
+		short maxDamage = CraftMagicNumbers.getMaterial(itemInHand.c()).getMaxDurability();
+		if (maxDamage > 0) { // Is tool/armor
+			int damage = damageTool(nmsPlayer, itemInHand, itemInHand.u != null && itemInHand.u.q("Unbreakable") ? 0 : 1);
+			if (damage > 0)
+				if (itemInHand.j() + damage >= CraftMagicNumbers.getMaterial(itemInHand.c()).getMaxDurability())
+					nmsPlayer.a(EnumHand.a, net.minecraft.world.item.ItemStack.b);
+				else
+					itemInHand.b(itemInHand.j() + damage);
+		}
 		// Packet response
 		BukkitLoader.getPacketHandler().send(player, new ClientboundBlockChangedAckPacket(packet.e()));
 
 		// Drop items & exp
 		Location dropLoc = pos.add(0.5, 0, 0.5).toLocation();
 		if (!loot.getItems().isEmpty() || breakEvent.getExpToDrop() > 0)
-			MinecraftServer.getServer().execute(() -> {
+			if (Bukkit.isPrimaryThread()) {
 
 				// Do not call event if isn't registered any listener
 				if (BlockBreakDropItemsEvent.getHandlerList().getRegisteredListeners().length == 0) {
@@ -343,7 +353,31 @@ public class v1_19_R1 implements BlockDestroyHandler {
 						ExperienceOrb orb = (ExperienceOrb) c;
 						orb.setExperience(breakEvent.getExpToDrop());
 					});
-			});
+			} else
+				MinecraftServer.getServer().execute(() -> {
+
+					// Do not call event if isn't registered any listener
+					if (BlockBreakDropItemsEvent.getHandlerList().getRegisteredListeners().length == 0) {
+						for (ItemStack drop : loot.getItems())
+							player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
+						if (breakEvent.getExpToDrop() > 0)
+							player.getWorld().spawn(dropLoc, EntityType.EXPERIENCE_ORB.getEntityClass(), c -> {
+								ExperienceOrb orb = (ExperienceOrb) c;
+								orb.setExperience(breakEvent.getExpToDrop());
+							});
+						return;
+					}
+					BlockBreakDropItemsEvent event = new BlockBreakDropItemsEvent(breakEvent, loot);
+					Bukkit.getPluginManager().callEvent(event);
+					if (!event.isCancelled())
+						for (ItemStack drop : event.getLoot().getItems())
+							player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
+					if (breakEvent.getExpToDrop() > 0)
+						player.getWorld().spawn(dropLoc, EntityType.EXPERIENCE_ORB.getEntityClass(), c -> {
+							ExperienceOrb orb = (ExperienceOrb) c;
+							orb.setExperience(breakEvent.getExpToDrop());
+						});
+				});
 	}
 
 	private int damageTool(EntityPlayer player, net.minecraft.world.item.ItemStack item, int damage) {

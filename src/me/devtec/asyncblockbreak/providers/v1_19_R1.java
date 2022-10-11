@@ -67,8 +67,10 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		Position clone = pos.clone().add(0, 1, 0);
 		IBlockData blockData = (IBlockData) clone.getIBlockData();
 		Material type = blockData.getBukkitMaterial();
-
-		if (type.name().endsWith("_LEAVES") && Loader.TICK_LEAVES) {
+		if (type == Material.NETHER_PORTAL) {
+			clone.setAirAndUpdate(false);
+			removeAllSurroundingPortals(clone);
+		} else if (type.name().endsWith("_LEAVES") && Loader.TICK_LEAVES) {
 			BlockLeaves c = (BlockLeaves) blockData.b();
 			c.a(blockData, EnumDirection.a((BlockPosition) pos.getBlockPosition()), Blocks.a.m(), ((CraftWorld) clone.getWorld()).getHandle(), (BlockPosition) clone.getBlockPosition(),
 					(BlockPosition) clone.getBlockPosition());
@@ -110,7 +112,10 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			type = blockData.getBukkitMaterial();
 			if (type == Material.WATER || type == Material.LAVA)
 				continue;
-			if (type.name().endsWith("_LEAVES") && Loader.TICK_LEAVES) {
+			if (type == Material.NETHER_PORTAL) {
+				clone.setAirAndUpdate(false);
+				removeAllSurroundingPortals(clone);
+			} else if (type.name().endsWith("_LEAVES") && Loader.TICK_LEAVES) {
 				BlockLeaves c = (BlockLeaves) blockData.b();
 				c.a(blockData, EnumDirection.a((BlockPosition) pos.getBlockPosition()), Blocks.a.m(), ((CraftWorld) clone.getWorld()).getHandle(), (BlockPosition) clone.getBlockPosition(),
 						(BlockPosition) clone.getBlockPosition());
@@ -144,7 +149,10 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		clone = pos.clone().add(0, -1, 0);
 		blockData = (IBlockData) clone.getIBlockData();
 		type = blockData.getBukkitMaterial();
-		if (type.name().endsWith("_LEAVES") && Loader.TICK_LEAVES) {
+		if (type == Material.NETHER_PORTAL) {
+			clone.setAirAndUpdate(false);
+			removeAllSurroundingPortals(clone);
+		} else if (type.name().endsWith("_LEAVES") && Loader.TICK_LEAVES) {
 			BlockLeaves c = (BlockLeaves) blockData.b();
 			c.a(blockData, EnumDirection.a((BlockPosition) pos.getBlockPosition()), Blocks.a.m(), ((CraftWorld) clone.getWorld()).getHandle(), (BlockPosition) clone.getBlockPosition(),
 					(BlockPosition) clone.getBlockPosition());
@@ -174,6 +182,18 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					clone.setY(clone.getY() - 1);
 					type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
 				}
+	}
+
+	private void removeAllSurroundingPortals(Position pos) {
+		for (BlockFace face : all_faces) {
+			Position clone = pos.clone().add(face.getModX(), face.getModY(), face.getModZ());
+			IBlockData blockData = (IBlockData) clone.getIBlockData();
+			Material type = blockData.getBukkitMaterial();
+			if (type == Material.NETHER_PORTAL) {
+				clone.setAirAndUpdate(false);
+				removeAllSurroundingPortals(clone);
+			}
+		}
 	}
 
 	private boolean blockBehindOrAbove(Position pos, IBlockData blockData) {
@@ -315,6 +335,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				pos.setAirAndUpdate(true);
 			if (material.isSolid() && !material.isAir() && !material.name().contains("WALL_"))
 				destroyAround(material, pos, player, loot, breakEvent.isDropItems());
+			else if (material == Material.NETHER_PORTAL)
+				removeAllSurroundingPortals(pos);
 		}
 		// Damage tool
 		net.minecraft.world.item.ItemStack itemInHand = nmsPlayer.b(EnumHand.a);

@@ -18,6 +18,7 @@ public interface BlockDestroyHandler {
 
 	static Constructor<?> packetDisconnect = Ref.constructor(Ref.nms("network.protocol.game", "PacketPlayOutKickDisconnect"), Ref.nms("network.chat", "IChatBaseComponent"));
 	static BlockFace[] faces = { BlockFace.EAST, BlockFace.WEST, BlockFace.NORTH, BlockFace.SOUTH };
+	static BlockFace[] all_faces = { BlockFace.EAST, BlockFace.WEST, BlockFace.NORTH, BlockFace.SOUTH, BlockFace.DOWN, BlockFace.UP };
 
 	boolean handle(String player, Object packet);
 

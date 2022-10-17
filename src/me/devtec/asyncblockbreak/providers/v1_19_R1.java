@@ -110,7 +110,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			clone = pos.clone().add(face.getModX(), face.getModY(), face.getModZ());
 			blockData = (IBlockData) clone.getIBlockData();
 			type = blockData.getBukkitMaterial();
-			if (type == Material.WATER || type == Material.LAVA)
+			if (type == Material.WATER || type == Material.LAVA || type.isAir()) // fast skip
 				continue;
 			if (type == Material.NETHER_PORTAL) {
 				clone.setAirAndUpdate(false);
@@ -126,9 +126,11 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				clone.setAirAndUpdate(false);
 				if (type == Material.CHORUS_PLANT)
 					destroyAround(type, clone, player, items, dropItems);
-			} else if (!type.isSolid() && !type.isAir() && type != Material.WATER && type != Material.LAVA)
-				if (type.name().contains("WALL_")) {
+			} else if (!type.isSolid() || type == Material.COCOA)
+				if (type.name().contains("WALL_") || type == Material.COCOA) {
 					BlockFace bface = BlockFace.valueOf(blockData.c(direction).name());
+					if (type == Material.COCOA)
+						bface = bface.getOppositeFace();
 					if (clone.getBlockX() - bface.getModX() == pos.getBlockX() && clone.getBlockZ() - bface.getModZ() == pos.getBlockZ()) {
 						if (dropItems)
 							for (ItemStack item : clone.getBlock().getDrops())

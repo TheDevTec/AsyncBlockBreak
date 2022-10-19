@@ -3,6 +3,7 @@ package me.devtec.asyncblockbreak.utils;
 import java.lang.reflect.Constructor;
 
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.BlockFace;
@@ -63,12 +64,14 @@ public interface BlockDestroyHandler {
 	}
 
 	default boolean isInvalid(Player player, Position pos) {
-		return !player.isOnline() || !player.isValid() || player.isDead() || player.getHealth() <= 0 || Loader.kick.contains(player.getUniqueId()) || invalidRange(player.getLocation(), player, pos);
+		return !player.isOnline() || !player.isValid() || player.isDead() || player.getHealth() <= 0 || player.getGameMode() == GameMode.SPECTATOR || Loader.KICK_PLAYER
+				? Loader.kick.contains(player.getUniqueId())
+				: false || invalidRange(player.getLocation(), player, pos);
 	}
 
 	default boolean invalidRange(Location location, Player player, Position pos) {
 		double radius = pos.distance(location);
-		if (radius > Loader.MAXIMUM_RADIUS_WITHIN_BLOCK_AND_PLAYER) {
+		if (Loader.MAXIMUM_RADIUS_WITHIN_BLOCK_AND_PLAYER != 0 && radius > Loader.MAXIMUM_RADIUS_WITHIN_BLOCK_AND_PLAYER) {
 			if (Loader.KICK_PLAYER) {
 				Loader.kick.add(player.getUniqueId());
 				BukkitLoader.getPacketHandler().send(player,
@@ -77,6 +80,8 @@ public interface BlockDestroyHandler {
 			announce("Player " + player.getName() + "[" + player.getUniqueId() + "] destroyed a block at too far a distance (" + radius + ") (Hacking?)");
 			return true;
 		}
+		if (Loader.DESTROYED_BLOCKS_LIMIT == 0)
+			return false;
 		int destroyedBlocks = Loader.destroyedCountInTick.getOrDefault(player.getUniqueId(), 0) + 1;
 		if (destroyedBlocks > Loader.DESTROYED_BLOCKS_LIMIT) {
 			if (Loader.KICK_PLAYER) {

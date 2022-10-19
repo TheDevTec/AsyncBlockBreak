@@ -1,25 +1,19 @@
 package me.devtec.asyncblockbreak.events;
 
-import java.lang.reflect.Field;
-
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
-import org.bukkit.event.Event;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.util.Consumer;
 
-import me.devtec.asyncblockbreak.Loader;
-import me.devtec.shared.Ref;
 import me.devtec.theapi.bukkit.game.BlockDataStorage;
 
 public class AsyncBlockBreakEvent extends BlockBreakEvent {
-	private static final Field async = Ref.field(Event.class, "async");
-
 	private BlockDataStorage blockData;
 	private boolean isInstant;
 	private BlockFace face;
+	private boolean tileDrops;
 	private Consumer<Item> consumer;
 
 	public AsyncBlockBreakEvent(Block theBlock, Player player, BlockDataStorage blockData, boolean instantlyBroken, BlockFace face) {
@@ -27,8 +21,6 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 		this.blockData = blockData;
 		isInstant = instantlyBroken;
 		this.face = face;
-		if (!Loader.SYNC_EVENT)
-			Ref.set(this, async, true);
 	}
 
 	public BlockFace getBlockFace() {
@@ -37,6 +29,14 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 
 	public boolean isInstant() {
 		return isInstant;
+	}
+
+	public boolean doTileDrops() {
+		return tileDrops;
+	}
+
+	public void setTileDrops(boolean status) {
+		tileDrops = status;
 	}
 
 	public BlockDataStorage getBlockData() {

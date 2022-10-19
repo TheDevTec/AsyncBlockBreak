@@ -25,6 +25,7 @@ import me.devtec.asyncblockbreak.events.AsyncBlockBreakEvent;
 import me.devtec.asyncblockbreak.events.BlockBreakDropItemsEvent;
 import me.devtec.asyncblockbreak.utils.BlockDestroyHandler;
 import me.devtec.shared.Ref;
+import me.devtec.shared.scheduler.Tasker;
 import me.devtec.theapi.bukkit.BukkitLoader;
 import me.devtec.theapi.bukkit.game.Position;
 import net.minecraft.core.BlockPosition;
@@ -40,8 +41,12 @@ import net.minecraft.world.item.enchantment.EnchantmentDurability;
 import net.minecraft.world.item.enchantment.EnchantmentManager;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.BlockLeaves;
+import net.minecraft.world.level.block.BlockTileEntity;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.TileEntity;
 import net.minecraft.world.level.block.entity.TileEntityChest;
+import net.minecraft.world.level.block.entity.TileEntityContainer;
+import net.minecraft.world.level.block.entity.TileEntityShulkerBox;
 import net.minecraft.world.level.block.state.IBlockData;
 import net.minecraft.world.level.block.state.properties.BlockProperties;
 import net.minecraft.world.level.block.state.properties.BlockPropertyBedPart;
@@ -67,15 +72,23 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		Position clone = pos.clone().add(0, 1, 0);
 		IBlockData blockData = (IBlockData) clone.getIBlockData();
 		Material type = blockData.getBukkitMaterial();
-		if (type == Material.NETHER_PORTAL) {
-			clone.setAirAndUpdate(false);
-			removeAllSurroundingPortals(clone);
-		} else if (type.name().endsWith("_LEAVES") && Loader.TICK_LEAVES) {
-			BlockLeaves c = (BlockLeaves) blockData.b();
-			c.a(blockData, EnumDirection.a((BlockPosition) pos.getBlockPosition()), Blocks.a.m(), ((CraftWorld) clone.getWorld()).getHandle(), (BlockPosition) clone.getBlockPosition(),
-					(BlockPosition) clone.getBlockPosition());
-		} else if (!(type == Material.WATER || type == Material.LAVA))
-			if (type == Material.CHORUS_PLANT || type == Material.CHORUS_FLOWER) {
+		if (!(type == Material.WATER || type == Material.LAVA))
+			if (type == Material.NETHER_PORTAL) {
+				clone.setAirAndUpdate(false);
+				removeAllSurroundingPortals(clone);
+			} else if (type == Material.POINTED_DRIPSTONE)
+				clone.updatePhysics();
+			else if (type == Material.AMETHYST_CLUSTER || type == Material.LARGE_AMETHYST_BUD || type == Material.MEDIUM_AMETHYST_BUD || type == Material.SMALL_AMETHYST_BUD
+					|| type == Material.BUDDING_AMETHYST) {
+				if (dropItems)
+					for (ItemStack item : clone.getBlock().getDrops())
+						items.add(item);
+				clone.setAirAndUpdate(false);
+			} else if (type.name().endsWith("_LEAVES") && Loader.TICK_LEAVES) {
+				BlockLeaves c = (BlockLeaves) blockData.b();
+				c.a(blockData, EnumDirection.a((BlockPosition) pos.getBlockPosition()), Blocks.a.m(), ((CraftWorld) clone.getWorld()).getHandle(), (BlockPosition) clone.getBlockPosition(),
+						(BlockPosition) clone.getBlockPosition());
+			} else if (type == Material.CHORUS_PLANT || type == Material.CHORUS_FLOWER) {
 				if (dropItems)
 					for (ItemStack item : clone.getBlock().getDrops())
 						items.add(item);
@@ -115,6 +128,12 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			if (type == Material.NETHER_PORTAL) {
 				clone.setAirAndUpdate(false);
 				removeAllSurroundingPortals(clone);
+			} else if (type == Material.AMETHYST_CLUSTER || type == Material.LARGE_AMETHYST_BUD || type == Material.MEDIUM_AMETHYST_BUD || type == Material.SMALL_AMETHYST_BUD
+					|| type == Material.BUDDING_AMETHYST) {
+				if (dropItems)
+					for (ItemStack item : clone.getBlock().getDrops())
+						items.add(item);
+				clone.setAirAndUpdate(false);
 			} else if (type.name().endsWith("_LEAVES") && Loader.TICK_LEAVES) {
 				BlockLeaves c = (BlockLeaves) blockData.b();
 				c.a(blockData, EnumDirection.a((BlockPosition) pos.getBlockPosition()), Blocks.a.m(), ((CraftWorld) clone.getWorld()).getHandle(), (BlockPosition) clone.getBlockPosition(),
@@ -151,15 +170,23 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		clone = pos.clone().add(0, -1, 0);
 		blockData = (IBlockData) clone.getIBlockData();
 		type = blockData.getBukkitMaterial();
-		if (type == Material.NETHER_PORTAL) {
-			clone.setAirAndUpdate(false);
-			removeAllSurroundingPortals(clone);
-		} else if (type.name().endsWith("_LEAVES") && Loader.TICK_LEAVES) {
-			BlockLeaves c = (BlockLeaves) blockData.b();
-			c.a(blockData, EnumDirection.a((BlockPosition) pos.getBlockPosition()), Blocks.a.m(), ((CraftWorld) clone.getWorld()).getHandle(), (BlockPosition) clone.getBlockPosition(),
-					(BlockPosition) clone.getBlockPosition());
-		} else if (!(type == Material.WATER || type == Material.LAVA))
-			if (type == Material.CHORUS_PLANT || type == Material.CHORUS_FLOWER) {
+		if (!(type == Material.WATER || type == Material.LAVA))
+			if (type == Material.NETHER_PORTAL) {
+				clone.setAirAndUpdate(false);
+				removeAllSurroundingPortals(clone);
+			} else if (type == Material.POINTED_DRIPSTONE)
+				clone.updatePhysics();
+			else if (type == Material.AMETHYST_CLUSTER || type == Material.LARGE_AMETHYST_BUD || type == Material.MEDIUM_AMETHYST_BUD || type == Material.SMALL_AMETHYST_BUD
+					|| type == Material.BUDDING_AMETHYST) {
+				if (dropItems)
+					for (ItemStack item : clone.getBlock().getDrops())
+						items.add(item);
+				clone.setAirAndUpdate(false);
+			} else if (type.name().endsWith("_LEAVES") && Loader.TICK_LEAVES) {
+				BlockLeaves c = (BlockLeaves) blockData.b();
+				c.a(blockData, EnumDirection.a((BlockPosition) pos.getBlockPosition()), Blocks.a.m(), ((CraftWorld) clone.getWorld()).getHandle(), (BlockPosition) clone.getBlockPosition(),
+						(BlockPosition) clone.getBlockPosition());
+			} else if (type == Material.CHORUS_PLANT || type == Material.CHORUS_FLOWER) {
 				if (dropItems)
 					for (ItemStack item : clone.getBlock().getDrops())
 						items.add(item);
@@ -242,8 +269,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	private void destroyChest(Player player, Position pos, IBlockData iblockdata, LootTable items, boolean dropItems) {
 		BlockPropertyChestType chesttype = iblockdata.c(chestType);
 		BlockFace face = BlockFace.valueOf(iblockdata.c(direction).name());
-		if (dropItems || !Loader.DISABLE_TILE_DROPS)
-			for (net.minecraft.world.item.ItemStack nmsItem : ((TileEntityChest) ((Chunk) pos.getNMSChunk()).getTileEntityImmediately((BlockPosition) pos.getBlockPosition())).getContents())
+		if (dropItems)
+			for (net.minecraft.world.item.ItemStack nmsItem : ((TileEntityChest) ((Chunk) pos.getNMSChunk()).c_((BlockPosition) pos.getBlockPosition())).getContents())
 				items.add(CraftItemStack.asBukkitCopy(nmsItem));
 		removeBlock(pos, isWaterlogged(iblockdata));
 
@@ -314,7 +341,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		}
 	}
 
-	public void breakBlock(Player player, Position pos, IBlockData iblockdata, EntityPlayer nmsPlayer, PacketPlayInBlockDig packet, AsyncBlockBreakEvent breakEvent) {
+	public void breakBlock(Player player, Position pos, IBlockData iblockdata, EntityPlayer nmsPlayer, PacketPlayInBlockDig packet, AsyncBlockBreakEvent breakEvent, boolean synced) {
 		LootTable loot = new LootTable();
 		// Add loot from block to the LootTable
 		if (breakEvent.isDropItems())
@@ -324,8 +351,25 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		// Destroy block/s
 		Material material = iblockdata.getBukkitMaterial();
 		if (material == Material.CHEST || material == Material.TRAPPED_CHEST)
-			destroyChest(player, pos, iblockdata, loot, breakEvent.isDropItems());
-		else if (isDoubleBlock(material)) // plant or door
+			destroyChest(player, pos, iblockdata, loot, breakEvent.doTileDrops());
+		if (breakEvent.doTileDrops() && iblockdata.b() instanceof BlockTileEntity) {
+			TileEntity blockEntity = ((Chunk) pos.getNMSChunk()).c_((BlockPosition) pos.getBlockPosition());
+			TileEntityContainer inv = blockEntity instanceof TileEntityContainer ? (TileEntityContainer) blockEntity : null;
+			if (inv != null && !(inv instanceof TileEntityShulkerBox))
+				for (net.minecraft.world.item.ItemStack item : inv.getContents())
+					loot.add(CraftItemStack.asBukkitCopy(item));
+			pos.setAirAndUpdate(true);
+			if (synced)
+				new Tasker() {
+
+					@Override
+					public void run() {
+						destroyAround(material, pos, player, loot, breakEvent.isDropItems());
+					}
+				}.runTask();
+			else
+				destroyAround(material, pos, player, loot, breakEvent.isDropItems());
+		} else if (isDoubleBlock(material)) // plant or door
 			destroyDoubleBlock(isWaterlogged(iblockdata), player, pos, iblockdata, loot, breakEvent.isDropItems());
 		else if (isBed(material))
 			destroyBed(player, pos, iblockdata, loot, breakEvent.isDropItems());
@@ -336,7 +380,16 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			else
 				pos.setAirAndUpdate(true);
 			if (material.isSolid() && !material.isAir() && !material.name().contains("WALL_"))
-				destroyAround(material, pos, player, loot, breakEvent.isDropItems());
+				if (synced)
+					new Tasker() {
+
+						@Override
+						public void run() {
+							destroyAround(material, pos, player, loot, breakEvent.isDropItems());
+						}
+					}.runTask();
+				else
+					destroyAround(material, pos, player, loot, breakEvent.isDropItems());
 			else if (material == Material.NETHER_PORTAL)
 				removeAllSurroundingPortals(pos);
 		}
@@ -357,7 +410,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		// Drop items & exp
 		Location dropLoc = pos.add(0.5, 0, 0.5).toLocation();
 		if (!loot.getItems().isEmpty() || breakEvent.getExpToDrop() > 0)
-			if (Bukkit.isPrimaryThread()) {
+			if (synced) {
 
 				// Do not call event if isn't registered any listener
 				if (BlockBreakDropItemsEvent.getHandlerList().getRegisteredListeners().length == 0) {
@@ -424,10 +477,10 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		return event.getDamage();
 	}
 
-	private void processBlockBreak(PacketPlayInBlockDig packet, Player player, EntityPlayer nmsPlayer, IBlockData iblockdata, BlockPosition blockPos, Position pos, boolean creativeOrSpectator,
+	private void processBlockBreak(PacketPlayInBlockDig packet, Player player, EntityPlayer nmsPlayer, IBlockData iblockdata, BlockPosition blockPos, Position pos, boolean dropItems,
 			boolean instantlyBroken) {
 		AsyncBlockBreakEvent event = new AsyncBlockBreakEvent(pos.getBlock(), player, BukkitLoader.getNmsProvider().toMaterial(iblockdata), instantlyBroken, BlockFace.valueOf(packet.c().name()));
-		event.setDropItems(creativeOrSpectator);
+		event.setTileDrops(!Loader.DISABLE_TILE_DROPS);
 
 		// Drop exp only in survival / adventure gamemode
 		if (player.getGameMode() == GameMode.ADVENTURE || player.getGameMode() == GameMode.SURVIVAL)
@@ -436,7 +489,9 @@ public class v1_19_R1 implements BlockDestroyHandler {
 
 		// Do not call event if isn't registered any listener - instantly process async
 		if (BlockExpEvent.getHandlerList().getRegisteredListeners().length == 0) {
-			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
+			event.setDropItems(dropItems);
+			Ref.set(event, async, true);
+			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event, false);
 			return;
 		}
 
@@ -447,15 +502,18 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
 					return;
 				}
-				breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
+				event.setDropItems(dropItems);
+				breakBlock(player, pos, iblockdata, nmsPlayer, packet, event, true);
 			});
 		else {
+			Ref.set(event, async, true);
 			Bukkit.getPluginManager().callEvent(event);
 			if (event.isCancelled()) {
 				sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
 				return;
 			}
-			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
+			event.setDropItems(dropItems);
+			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event, false);
 		}
 	}
 

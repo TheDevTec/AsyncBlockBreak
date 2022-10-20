@@ -409,8 +409,31 @@ public class v1_19_R1 implements BlockDestroyHandler {
 
 		// Drop items & exp
 		Location dropLoc = pos.add(0.5, 0, 0.5).toLocation();
-		if (!loot.getItems().isEmpty() || breakEvent.getExpToDrop() > 0)
-			if (synced) {
+		if (synced) {
+
+			// Do not call event if isn't registered any listener
+			if (BlockBreakDropItemsEvent.getHandlerList().getRegisteredListeners().length == 0) {
+				for (ItemStack drop : loot.getItems())
+					player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
+				if (breakEvent.getExpToDrop() > 0)
+					player.getWorld().spawn(dropLoc, EntityType.EXPERIENCE_ORB.getEntityClass(), c -> {
+						ExperienceOrb orb = (ExperienceOrb) c;
+						orb.setExperience(breakEvent.getExpToDrop());
+					});
+				return;
+			}
+			BlockBreakDropItemsEvent event = new BlockBreakDropItemsEvent(breakEvent, loot);
+			Bukkit.getPluginManager().callEvent(event);
+			if (!event.isCancelled())
+				for (ItemStack drop : event.getLoot().getItems())
+					player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
+			if (breakEvent.getExpToDrop() > 0)
+				player.getWorld().spawn(dropLoc, EntityType.EXPERIENCE_ORB.getEntityClass(), c -> {
+					ExperienceOrb orb = (ExperienceOrb) c;
+					orb.setExperience(breakEvent.getExpToDrop());
+				});
+		} else
+			MinecraftServer.getServer().execute(() -> {
 
 				// Do not call event if isn't registered any listener
 				if (BlockBreakDropItemsEvent.getHandlerList().getRegisteredListeners().length == 0) {
@@ -433,31 +456,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 						ExperienceOrb orb = (ExperienceOrb) c;
 						orb.setExperience(breakEvent.getExpToDrop());
 					});
-			} else
-				MinecraftServer.getServer().execute(() -> {
-
-					// Do not call event if isn't registered any listener
-					if (BlockBreakDropItemsEvent.getHandlerList().getRegisteredListeners().length == 0) {
-						for (ItemStack drop : loot.getItems())
-							player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
-						if (breakEvent.getExpToDrop() > 0)
-							player.getWorld().spawn(dropLoc, EntityType.EXPERIENCE_ORB.getEntityClass(), c -> {
-								ExperienceOrb orb = (ExperienceOrb) c;
-								orb.setExperience(breakEvent.getExpToDrop());
-							});
-						return;
-					}
-					BlockBreakDropItemsEvent event = new BlockBreakDropItemsEvent(breakEvent, loot);
-					Bukkit.getPluginManager().callEvent(event);
-					if (!event.isCancelled())
-						for (ItemStack drop : event.getLoot().getItems())
-							player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
-					if (breakEvent.getExpToDrop() > 0)
-						player.getWorld().spawn(dropLoc, EntityType.EXPERIENCE_ORB.getEntityClass(), c -> {
-							ExperienceOrb orb = (ExperienceOrb) c;
-							orb.setExperience(breakEvent.getExpToDrop());
-						});
-				});
+			});
 	}
 
 	private int damageTool(EntityPlayer player, net.minecraft.world.item.ItemStack item, int damage) {

@@ -12,8 +12,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import me.devtec.asyncblockbreak.providers.v1_19_R1;
 import me.devtec.asyncblockbreak.utils.BlockDestroyHandler;
-import me.devtec.shared.Ref;
 import me.devtec.shared.dataholder.Config;
 import me.devtec.shared.dataholder.DataType;
 import me.devtec.shared.scheduler.Tasker;
@@ -75,7 +75,10 @@ public class Loader extends JavaPlugin implements Listener {
 	}
 
 	private void initProvider() {
-		handler = (BlockDestroyHandler) Ref.newInstanceByClass("me.devtec.asyncblockbreak.providers." + Ref.serverVersion());
+		// handler = (BlockDestroyHandler)
+		// Ref.newInstanceByClass("me.devtec.asyncblockbreak.providers." +
+		// Ref.serverVersion());
+		handler = new v1_19_R1();
 	}
 
 	private void initConfig() {

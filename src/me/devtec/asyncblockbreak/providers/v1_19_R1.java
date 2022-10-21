@@ -25,7 +25,6 @@ import me.devtec.asyncblockbreak.events.AsyncBlockBreakEvent;
 import me.devtec.asyncblockbreak.events.BlockBreakDropItemsEvent;
 import me.devtec.asyncblockbreak.utils.BlockDestroyHandler;
 import me.devtec.shared.Ref;
-import me.devtec.shared.scheduler.Tasker;
 import me.devtec.theapi.bukkit.BukkitLoader;
 import me.devtec.theapi.bukkit.game.Position;
 import net.minecraft.core.BlockPosition;
@@ -72,7 +71,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		Position clone = pos.clone().add(0, 1, 0);
 		IBlockData blockData = (IBlockData) clone.getIBlockData();
 		Material type = blockData.getBukkitMaterial();
-		if (!(type == Material.WATER || type == Material.LAVA))
+		if (!(type == Material.WATER || type == Material.LAVA || type.isAir()))
 			if (type == Material.NETHER_PORTAL) {
 				clone.setAirAndUpdate(false);
 				removeAllSurroundingPortals(clone);
@@ -109,14 +108,17 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					clone.setY(clone.getY() + 1);
 					type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
 				}
-			} else if (!type.isSolid() && !type.isAir() && !type.name().contains("WALL_") && !(type == Material.WEEPING_VINES || type == Material.WEEPING_VINES_PLANT))
-				if (isDoubleBlock(type)) {// plant or door
-					if (dropItems)
-						for (ItemStack item : clone.getBlock().getDrops())
-							items.add(item);
-					destroyDoubleBlock(isWaterlogged(blockData), player, clone, blockData, items, dropItems);
-				} else
-					removeBlock(clone, isWaterlogged(blockData));
+			} else if (isDoubleBlock(type)) { // plant or door
+				if (dropItems)
+					for (ItemStack item : clone.getBlock().getDrops())
+						items.add(item);
+				destroyDoubleBlock(isWaterlogged(blockData), player, clone, blockData, items, dropItems);
+			} else if (!type.isSolid() && !type.name().contains("WALL_") && !(type == Material.WEEPING_VINES || type == Material.WEEPING_VINES_PLANT) && !type.name().endsWith("_HEAD")) {
+				if (dropItems)
+					for (ItemStack item : clone.getBlock().getDrops())
+						items.add(item);
+				removeBlock(clone, isWaterlogged(blockData));
+			}
 
 		// sides
 		for (BlockFace face : faces) {
@@ -341,7 +343,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		}
 	}
 
-	public void breakBlock(Player player, Position pos, IBlockData iblockdata, EntityPlayer nmsPlayer, PacketPlayInBlockDig packet, AsyncBlockBreakEvent breakEvent, boolean synced) {
+	public void breakBlock(Player player, Position pos, IBlockData iblockdata, EntityPlayer nmsPlayer, PacketPlayInBlockDig packet, AsyncBlockBreakEvent breakEvent) {
 		LootTable loot = breakEvent.getLoot();
 		// Add loot from block to the LootTable
 		if (breakEvent.isDropItems())
@@ -358,41 +360,21 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			if (inv != null && !(inv instanceof TileEntityShulkerBox))
 				for (net.minecraft.world.item.ItemStack item : inv.getContents())
 					loot.add(CraftItemStack.asBukkitCopy(item));
-			pos.setAirAndUpdate(true);
-			if (synced)
-				new Tasker() {
-
-					@Override
-					public void run() {
-						destroyAround(material, pos, player, loot, breakEvent.isDropItems());
-					}
-				}.runTask();
-			else
-				destroyAround(material, pos, player, loot, breakEvent.isDropItems());
+			pos.setAirAndUpdate(false);
+			destroyAround(material, pos, player, loot, breakEvent.isDropItems());
 		} else if (isDoubleBlock(material)) // plant or door
 			destroyDoubleBlock(isWaterlogged(iblockdata), player, pos, iblockdata, loot, breakEvent.isDropItems());
 		else if (isBed(material))
 			destroyBed(player, pos, iblockdata, loot, breakEvent.isDropItems());
 		else {
 			// Set block to air/water & update nearby blocks
-			if (isWaterlogged(iblockdata))
-				pos.setTypeAndUpdate(Material.WATER, true);
-			else
-				pos.setAirAndUpdate(true);
+			removeBlock(pos, isWaterlogged(iblockdata));
 			if (material.isSolid() && !material.isAir() && !material.name().contains("WALL_"))
-				if (synced)
-					new Tasker() {
-
-						@Override
-						public void run() {
-							destroyAround(material, pos, player, loot, breakEvent.isDropItems());
-						}
-					}.runTask();
-				else
-					destroyAround(material, pos, player, loot, breakEvent.isDropItems());
+				destroyAround(material, pos, player, loot, breakEvent.isDropItems());
 			else if (material == Material.NETHER_PORTAL)
 				removeAllSurroundingPortals(pos);
 		}
+		pos.updatePhysics();
 		// Damage tool
 		net.minecraft.world.item.ItemStack itemInHand = nmsPlayer.b(EnumHand.a);
 		short maxDamage = CraftMagicNumbers.getMaterial(itemInHand.c()).getMaxDurability();
@@ -410,7 +392,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		// Drop items & exp
 		Location dropLoc = pos.add(0.5, 0, 0.5).toLocation();
 		if (!loot.getItems().isEmpty() || breakEvent.getExpToDrop() > 0)
-			if (synced) {
+			if (Bukkit.isPrimaryThread()) {
 
 				// Do not call event if isn't registered any listener
 				if (BlockBreakDropItemsEvent.getHandlerList().getRegisteredListeners().length == 0) {
@@ -497,7 +479,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		if (BlockExpEvent.getHandlerList().getRegisteredListeners().length == 0) {
 			event.setDropItems(dropItems);
 			Ref.set(event, async, true);
-			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event, false);
+			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
 			return;
 		}
 
@@ -509,7 +491,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					return;
 				}
 				event.setDropItems(dropItems);
-				breakBlock(player, pos, iblockdata, nmsPlayer, packet, event, true);
+				breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
 			});
 		else {
 			Ref.set(event, async, true);
@@ -519,7 +501,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				return;
 			}
 			event.setDropItems(dropItems);
-			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event, false);
+			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
 		}
 	}
 
@@ -555,8 +537,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				processBlockBreak(packet, player, nmsPlayer, iblockdata, blockPos, pos, false, true);
 				return true;
 			}
-
-			iblockdata.a(nmsPlayer.s, blockPos, nmsPlayer); // hit block
+			// iblockdata.a(nmsPlayer.s, blockPos, nmsPlayer); // hit block
 			float f = iblockdata.a(nmsPlayer, nmsPlayer.s, blockPos); // get damage
 			if (f >= 1.0F) {
 				if (iblockdata.getBukkitMaterial() == Material.AIR || isInvalid(player, pos)) {

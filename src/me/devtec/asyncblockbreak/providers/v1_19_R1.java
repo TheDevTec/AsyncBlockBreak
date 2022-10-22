@@ -35,11 +35,14 @@ import net.minecraft.network.protocol.game.PacketPlayInBlockDig.EnumPlayerDigTyp
 import net.minecraft.network.protocol.game.PacketPlayOutBlockChange;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.EntityPlayer;
+import net.minecraft.server.level.WorldServer;
 import net.minecraft.world.EnumHand;
+import net.minecraft.world.entity.item.EntityFallingBlock;
 import net.minecraft.world.item.enchantment.EnchantmentDurability;
 import net.minecraft.world.item.enchantment.EnchantmentManager;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.BlockLeaves;
+import net.minecraft.world.level.block.BlockTall;
 import net.minecraft.world.level.block.BlockTileEntity;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.TileEntity;
@@ -61,6 +64,9 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	static IBlockState<BlockPropertyChestType> chestType = BlockProperties.bd;
 	// vines
 	static IBlockState<Boolean> east = BlockProperties.N, north = BlockProperties.M, south = BlockProperties.O, west = BlockProperties.P, up = BlockProperties.K;
+	static IBlockState<EnumDirection> vertical_direction = BlockProperties.bn;
+	@SuppressWarnings("unchecked")
+	static IBlockState<Boolean>[] BLOCK_ROTATIONS = new IBlockState[] { east, north, south, west };
 	static Field async = Ref.field(Event.class, "async");
 
 	private void destroyAround(Material blockType, Position pos, Player player, LootTable items, boolean dropItems) {
@@ -75,9 +81,15 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			if (type == Material.NETHER_PORTAL) {
 				clone.setAirAndUpdate(false);
 				removeAllSurroundingPortals(clone);
-			} else if (type == Material.POINTED_DRIPSTONE)
-				clone.updatePhysics();
-			else if (type == Material.AMETHYST_CLUSTER || type == Material.LARGE_AMETHYST_BUD || type == Material.MEDIUM_AMETHYST_BUD || type == Material.SMALL_AMETHYST_BUD
+			} else if (type == Material.POINTED_DRIPSTONE) { // Dripstones pointed up remove without drops
+				EnumDirection vert = blockData.c(vertical_direction);
+				while (type == Material.POINTED_DRIPSTONE && vert == EnumDirection.b) {
+					removeBlock(clone, isWaterlogged(blockData));
+					vert = blockData.c(vertical_direction);
+					clone.setY(clone.getY() + 1);
+					type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
+				}
+			} else if (type == Material.AMETHYST_CLUSTER || type == Material.LARGE_AMETHYST_BUD || type == Material.MEDIUM_AMETHYST_BUD || type == Material.SMALL_AMETHYST_BUD
 					|| type == Material.BUDDING_AMETHYST) {
 				if (dropItems)
 					for (ItemStack item : clone.getBlock().getDrops())
@@ -119,7 +131,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 						items.add(item);
 				removeBlock(clone, isWaterlogged(blockData));
 			}
-
 		// sides
 		for (BlockFace face : faces) {
 			clone = pos.clone().add(face.getModX(), face.getModY(), face.getModZ());
@@ -127,7 +138,20 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			type = blockData.getBukkitMaterial();
 			if (type == Material.WATER || type == Material.LAVA || type.isAir()) // fast skip
 				continue;
-			if (type == Material.NETHER_PORTAL) {
+			if (blockData.b() instanceof BlockTall tall) {
+				int stateId = 0;
+				for (IBlockState<Boolean> state : BLOCK_ROTATIONS) {
+					BlockFace bface = stateId == 0 ? BlockFace.EAST : stateId == 1 ? BlockFace.NORTH : stateId == 2 ? BlockFace.SOUTH : BlockFace.WEST;
+					bface = bface.getOppositeFace();
+					++stateId;
+					if (clone.getBlockX() - bface.getModX() == pos.getBlockX() && clone.getBlockZ() - bface.getModZ() == pos.getBlockZ()) {
+						blockData = blockData.a(state, false);
+						BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), blockData);
+						BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), new PacketPlayOutBlockChange((BlockPosition) clone.getBlockPosition(), blockData));
+						break;
+					}
+				}
+			} else if (type == Material.NETHER_PORTAL) {
 				clone.setAirAndUpdate(false);
 				removeAllSurroundingPortals(clone);
 			} else if (type == Material.AMETHYST_CLUSTER || type == Material.LARGE_AMETHYST_BUD || type == Material.MEDIUM_AMETHYST_BUD || type == Material.SMALL_AMETHYST_BUD
@@ -176,9 +200,31 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			if (type == Material.NETHER_PORTAL) {
 				clone.setAirAndUpdate(false);
 				removeAllSurroundingPortals(clone);
-			} else if (type == Material.POINTED_DRIPSTONE)
-				clone.updatePhysics();
-			else if (type == Material.AMETHYST_CLUSTER || type == Material.LARGE_AMETHYST_BUD || type == Material.MEDIUM_AMETHYST_BUD || type == Material.SMALL_AMETHYST_BUD
+			} else if (type == Material.POINTED_DRIPSTONE) { // Dripstones pointed down "drop" down
+				EnumDirection vert = blockData.c(vertical_direction);
+				while (type == Material.POINTED_DRIPSTONE && vert == EnumDirection.a) {
+					BlockPosition bPos = (BlockPosition) clone.getBlockPosition();
+					IBlockData data = blockData;
+					WorldServer world = ((CraftWorld) clone.getWorld()).getHandle();
+					if (Bukkit.isPrimaryThread()) {
+						EntityFallingBlock dripstone = EntityFallingBlock.a(world, bPos, data);
+						int i = Math.max(1 + bPos.v() - bPos.i().v(), 6);
+						float f = 1.0F * i;
+						dripstone.b(f, 40);
+					} else
+						BukkitLoader.getNmsProvider().postToMainThread(() -> {
+							EntityFallingBlock dripstone = EntityFallingBlock.a(world, bPos, data);
+							int i = Math.max(1 + bPos.v() - bPos.i().v(), 6);
+							float f = 1.0F * i;
+							dripstone.b(f, 40);
+						});
+					removeBlock(clone, isWaterlogged(blockData));
+					vert = blockData.c(vertical_direction);
+					clone.setY(clone.getY() - 1);
+					blockData = (IBlockData) clone.getIBlockData();
+					type = blockData.getBukkitMaterial();
+				}
+			} else if (type == Material.AMETHYST_CLUSTER || type == Material.LARGE_AMETHYST_BUD || type == Material.MEDIUM_AMETHYST_BUD || type == Material.SMALL_AMETHYST_BUD
 					|| type == Material.BUDDING_AMETHYST) {
 				if (dropItems)
 					for (ItemStack item : clone.getBlock().getDrops())
@@ -299,7 +345,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				data = data.a(chestType, BlockPropertyChestType.a);
 				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), data);
 				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), new PacketPlayOutBlockChange((BlockPosition) clone.getBlockPosition(), data));
-				Position.updateLightAt(clone);
 			}
 		} else if (chesttype == BlockPropertyChestType.b) {
 			Position clone = pos.clone();
@@ -324,7 +369,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				data = data.a(chestType, BlockPropertyChestType.a);
 				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), data);
 				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), new PacketPlayOutBlockChange((BlockPosition) clone.getBlockPosition(), data));
-				Position.updateLightAt(clone);
 			}
 		}
 	}
@@ -352,9 +396,12 @@ public class v1_19_R1 implements BlockDestroyHandler {
 
 		// Destroy block/s
 		Material material = iblockdata.getBukkitMaterial();
-		if (material == Material.CHEST || material == Material.TRAPPED_CHEST)
+		if (material == Material.CHEST || material == Material.TRAPPED_CHEST) {
 			destroyChest(player, pos, iblockdata, loot, breakEvent.doTileDrops());
+			pos.updatePhysics(null);
+		}
 		if (breakEvent.doTileDrops() && iblockdata.b() instanceof BlockTileEntity) {
+			Object prev = pos.getIBlockData();
 			TileEntity blockEntity = ((Chunk) pos.getNMSChunk()).c_((BlockPosition) pos.getBlockPosition());
 			TileEntityContainer inv = blockEntity instanceof TileEntityContainer ? (TileEntityContainer) blockEntity : null;
 			if (inv != null && !(inv instanceof TileEntityShulkerBox))
@@ -362,19 +409,23 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					loot.add(CraftItemStack.asBukkitCopy(item));
 			pos.setAirAndUpdate(false);
 			destroyAround(material, pos, player, loot, breakEvent.isDropItems());
-		} else if (isDoubleBlock(material)) // plant or door
+			pos.updatePhysics(prev);
+		} else if (isDoubleBlock(material)) { // plant or door
 			destroyDoubleBlock(isWaterlogged(iblockdata), player, pos, iblockdata, loot, breakEvent.isDropItems());
-		else if (isBed(material))
+			pos.updatePhysics(null);
+		} else if (isBed(material)) {
 			destroyBed(player, pos, iblockdata, loot, breakEvent.isDropItems());
-		else {
+			pos.updatePhysics(null);
+		} else {
+			Object prev = pos.getIBlockData();
 			// Set block to air/water & update nearby blocks
 			removeBlock(pos, isWaterlogged(iblockdata));
 			if (material.isSolid() && !material.isAir() && !material.name().contains("WALL_"))
 				destroyAround(material, pos, player, loot, breakEvent.isDropItems());
 			else if (material == Material.NETHER_PORTAL)
 				removeAllSurroundingPortals(pos);
+			pos.updatePhysics(prev);
 		}
-		pos.updatePhysics();
 		// Damage tool
 		net.minecraft.world.item.ItemStack itemInHand = nmsPlayer.b(EnumHand.a);
 		short maxDamage = CraftMagicNumbers.getMaterial(itemInHand.c()).getMaxDurability();

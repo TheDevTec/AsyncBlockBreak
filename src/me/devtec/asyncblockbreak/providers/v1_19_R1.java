@@ -181,7 +181,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 							items.add(item);
 					removeBlock(clone, isWaterlogged(blockData));
 				}
-			} else if (!type.isSolid() && !type.name().contains("WALL_") && !(type == Material.WEEPING_VINES || type == Material.WEEPING_VINES_PLANT) && !type.name().endsWith("_HEAD")) {
+			} else if (type.name().endsWith("_SIGN")
+					|| !type.isSolid() && !type.name().contains("WALL_") && !(type == Material.WEEPING_VINES || type == Material.WEEPING_VINES_PLANT) && !type.name().endsWith("_HEAD")) {
 				if (dropItems)
 					for (ItemStack item : clone.getBlock().getDrops())
 						items.add(item);
@@ -459,9 +460,12 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	private void destroyChest(Player player, Position pos, IBlockData iblockdata, LootTable items, boolean dropItems) {
 		BlockPropertyChestType chesttype = iblockdata.c(chestType);
 		BlockFace face = BlockFace.valueOf(iblockdata.c(direction).name());
-		if (dropItems)
-			for (net.minecraft.world.item.ItemStack nmsItem : ((TileEntityChest) ((Chunk) pos.getNMSChunk()).c_((BlockPosition) pos.getBlockPosition())).getContents())
-				items.add(CraftItemStack.asBukkitCopy(nmsItem));
+		if (dropItems) {
+			TileEntityChest tile = (TileEntityChest) ((Chunk) pos.getNMSChunk()).c_((BlockPosition) pos.getBlockPosition());
+			if (tile != null)
+				for (net.minecraft.world.item.ItemStack nmsItem : tile.getContents())
+					items.add(CraftItemStack.asBukkitCopy(nmsItem));
+		}
 		removeBlock(pos, isWaterlogged(iblockdata));
 
 		if (chesttype == BlockPropertyChestType.c) {
@@ -540,7 +544,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		Material material = iblockdata.getBukkitMaterial();
 		if (material == Material.CHEST || material == Material.TRAPPED_CHEST) {
 			destroyChest(player, pos, iblockdata, loot, breakEvent.doTileDrops());
-			pos.updatePhysics(null);
+			pos.updatePhysics(Blocks.a.m());
 		}
 		if (breakEvent.doTileDrops() && iblockdata.b() instanceof BlockTileEntity) {
 			Object prev = pos.getIBlockData();
@@ -554,10 +558,10 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			pos.updatePhysics(prev);
 		} else if (isDoubleBlock(material)) { // plant or door
 			destroyDoubleBlock(isWaterlogged(iblockdata), player, pos, iblockdata, loot, breakEvent.isDropItems());
-			pos.updatePhysics(null);
+			pos.updatePhysics(Blocks.a.m());
 		} else if (isBed(material)) {
 			destroyBed(player, pos, iblockdata, loot, breakEvent.isDropItems());
-			pos.updatePhysics(null);
+			pos.updatePhysics(Blocks.a.m());
 		} else {
 			Object prev = pos.getIBlockData();
 			// Set block to air/water & update nearby blocks

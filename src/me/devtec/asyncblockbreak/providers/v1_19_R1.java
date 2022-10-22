@@ -129,9 +129,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	}
 
 	private void destroyAround(Material blockType, EnumDirection dir, Position pos, Player player, LootTable items, boolean dropItems) {
-		// FIX PLANT
-		fixPlantIfType(pos, blockType);
-
 		// top
 		Position clone = pos.clone().add(0, 1, 0);
 		IBlockData blockData = (IBlockData) clone.getIBlockData();
@@ -273,12 +270,14 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN)
 					destroyVine(clone, blockData);
 			} else if (Loader.LADDER_WORKS_AS_VINE && blockData.b() instanceof BlockLadder && !blockBehindOrAboveLadder(clone, blockData)) {
+				if (dropItems)
+					items.add(new ItemStack(Material.LADDER));
 				removeBlock(clone, isWaterlogged(blockData));
 				clone.setY(clone.getY() - 1);
 				blockData = (IBlockData) clone.getIBlockData();
 				type = blockData.getBukkitMaterial();
 				if (type == Material.LADDER)
-					destroyLadder(clone, blockData);
+					destroyLadder(clone, items, dropItems, blockData);
 			}
 		}
 
@@ -329,6 +328,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					for (ItemStack item : clone.getBlock().getDrops())
 						items.add(item);
 				clone.setAirAndUpdate(false);
+				// TODO rework
 				if (type == Material.CHORUS_PLANT)
 					destroyAround(type, null, clone, player, items, dropItems);
 			} else if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN) {
@@ -347,7 +347,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 							items.add(item);
 					removeBlock(clone, isWaterlogged(blockData));
 				}
-			} else
+			} else if (type == Material.WEEPING_VINES || type == Material.WEEPING_VINES_PLANT)
 				while (type == Material.WEEPING_VINES || type == Material.WEEPING_VINES_PLANT) {
 					if (dropItems)
 						for (ItemStack item : clone.getBlock().getDrops())
@@ -396,8 +396,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	}
 
 	private boolean blockBehindOrAboveLadder(Position pos, IBlockData blockData) {
-		if (pos.clone().add(0, 1, 0).getBukkitType() == Material.LADDER
-				|| isSolid(pos.clone().add(BlockFace.valueOf(blockData.c(direction).name()).getModX(), 0, BlockFace.valueOf(blockData.c(direction).name()).getModZ())))
+		if (pos.clone().add(0, 1, 0).getBukkitType() == Material.LADDER || isSolid(
+				pos.clone().add(BlockFace.valueOf(blockData.c(direction).name()).getOppositeFace().getModX(), 0, BlockFace.valueOf(blockData.c(direction).name()).getOppositeFace().getModZ())))
 			return true;
 		return false;
 	}
@@ -414,7 +414,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			destroyVine(pos, blockData);
 	}
 
-	private void destroyLadder(Position pos, IBlockData blockData) {
+	private void destroyLadder(Position pos, LootTable loot, boolean dropItems, IBlockData blockData) {
 		if (blockBehindOrAboveLadder(pos, blockData))
 			return;
 
@@ -422,8 +422,10 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		pos = pos.clone().setY(pos.getY() - 1);
 		blockData = (IBlockData) pos.getIBlockData();
 		Material type = blockData.getBukkitMaterial();
+		if (dropItems)
+			loot.add(new ItemStack(Material.LADDER));
 		if (type == Material.LADDER)
-			destroyLadder(pos, blockData);
+			destroyLadder(pos, loot, dropItems, blockData);
 	}
 
 	private static void destroyBed(Player player, Position clone, IBlockData blockData, LootTable items, boolean dropItems) {
@@ -563,6 +565,52 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				destroyAround(material, packet.c(), pos, player, loot, breakEvent.isDropItems());
 			else if (material == Material.NETHER_PORTAL)
 				removeAllSurroundingPortals(pos);
+			else if (Loader.LADDER_WORKS_AS_VINE && material == Material.LADDER) {
+				Position clone = pos.clone();
+				clone.setY(clone.getY() - 1);
+				IBlockData blockData = (IBlockData) clone.getIBlockData();
+				Material type = blockData.getBukkitMaterial();
+				if (type == Material.LADDER)
+					destroyLadder(clone, loot, breakEvent.isDropItems(), blockData);
+			} else if (material == Material.VINE || material == Material.CAVE_VINES || material == Material.GLOW_LICHEN) {
+				Position clone = pos.clone();
+				clone.setY(clone.getY() - 1);
+				IBlockData blockData = (IBlockData) clone.getIBlockData();
+				Material type = blockData.getBukkitMaterial();
+				if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN)
+					destroyVine(clone, blockData);
+			} else if (material == Material.WEEPING_VINES || material == Material.WEEPING_VINES_PLANT) {
+				fixPlantIfType(pos, material);
+				Position clone = pos.clone();
+				clone.setY(clone.getY() - 1);
+				Material type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
+				while (type == Material.WEEPING_VINES || type == Material.WEEPING_VINES_PLANT) {
+					if (breakEvent.isDropItems())
+						for (ItemStack item : clone.getBlock().getDrops())
+							loot.add(item);
+					clone.setAirAndUpdate(false);
+					clone.setY(clone.getY() - 1);
+					type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
+				}
+			} else if (material == Material.CHORUS_PLANT || material == Material.CHORUS_FLOWER)
+				// TODO rework
+				destroyAround(material, null, pos, player, loot, breakEvent.isDropItems());
+			else if (material == Material.TWISTING_VINES || material == Material.TWISTING_VINES_PLANT || material == Material.SUGAR_CANE || material == Material.BAMBOO || material == Material.KELP
+					|| material == Material.KELP_PLANT) {
+				Position clone = pos.clone();
+				clone.setY(clone.getY() + 1);
+				Material type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
+				while (type == Material.TWISTING_VINES || type == Material.TWISTING_VINES_PLANT || type == Material.SUGAR_CANE || type == Material.BAMBOO || type == Material.KELP
+						|| type == Material.KELP_PLANT) {
+					if (breakEvent.isDropItems())
+						for (ItemStack item : clone.getBlock().getDrops())
+							loot.add(item);
+					removeBlock(clone, type == Material.KELP || type == Material.KELP_PLANT);
+					clone.setY(clone.getY() + 1);
+					type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
+				}
+				fixPlantIfType(pos, material);
+			}
 			pos.updatePhysics(prev);
 		}
 		// Damage tool

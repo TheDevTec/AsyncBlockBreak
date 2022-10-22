@@ -49,15 +49,15 @@ public interface BlockDestroyHandler {
 
 	default void fixPlantIfType(Position pos, Material blockType) {
 		if (blockType == Material.KELP || blockType == Material.KELP_PLANT)
-			fixPlant(pos, Material.KELP_PLANT, Material.KELP, Material.KELP);
+			fixPlant(pos, -1, Material.KELP_PLANT, Material.KELP, Material.KELP);
 		else if (blockType == Material.TWISTING_VINES || blockType == Material.TWISTING_VINES_PLANT)
-			fixPlant(pos, Material.TWISTING_VINES, Material.TWISTING_VINES_PLANT, Material.TWISTING_VINES);
+			fixPlant(pos, -1, Material.TWISTING_VINES, Material.TWISTING_VINES_PLANT, Material.TWISTING_VINES);
 		else if (blockType == Material.WEEPING_VINES || blockType == Material.WEEPING_VINES_PLANT)
-			fixPlant(pos, Material.WEEPING_VINES, Material.WEEPING_VINES_PLANT, Material.WEEPING_VINES);
+			fixPlant(pos, 1, Material.WEEPING_VINES, Material.WEEPING_VINES_PLANT, Material.WEEPING_VINES);
 	}
 
-	default void fixPlant(Position pos, Material thisOne, Material orThisOne, Material replacement) {
-		Position clone2 = pos.clone().add(0, -1, 0);
+	default void fixPlant(Position pos, int jump, Material thisOne, Material orThisOne, Material replacement) {
+		Position clone2 = pos.clone().add(0, jump, 0);
 		Material type = clone2.getBukkitType();
 		if (type == thisOne || type == orThisOne)
 			clone2.setTypeAndUpdate(replacement, false);

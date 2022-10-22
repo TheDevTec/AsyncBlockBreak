@@ -446,7 +446,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	private static void destroyBed(Player player, Position clone, IBlockData blockData, LootTable items, boolean dropItems) {
 		clone.setAirAndUpdate(false);
 		BlockFace face = BlockFace.valueOf(blockData.c(direction).name());
-		if (blockData.c(bedpart).name().equals("HEAD"))
+		if (blockData.c(bedpart) == BlockPropertyBedPart.a)
 			clone.add(face.getOppositeFace().getModX(), 0, face.getOppositeFace().getModZ());
 		else {
 			clone.add(face.getModX(), 0, face.getModZ());

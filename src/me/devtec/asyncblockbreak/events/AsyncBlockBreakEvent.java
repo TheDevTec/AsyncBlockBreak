@@ -1,6 +1,5 @@
 package me.devtec.asyncblockbreak.events;
 
-import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
@@ -9,6 +8,7 @@ import org.bukkit.util.Consumer;
 
 import me.devtec.asyncblockbreak.api.LootTable;
 import me.devtec.theapi.bukkit.game.BlockDataStorage;
+import me.devtec.theapi.bukkit.game.Position;
 
 public class AsyncBlockBreakEvent extends BlockBreakEvent {
 	private BlockDataStorage blockData;
@@ -17,9 +17,10 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 	private boolean tileDrops;
 	private Consumer<Item> consumer;
 	private LootTable loot;
+	private Position pos;
 
-	public AsyncBlockBreakEvent(Block theBlock, Player player, BlockDataStorage blockData, boolean instantlyBroken, BlockFace face) {
-		super(theBlock, player);
+	public AsyncBlockBreakEvent(Position pos, Player player, BlockDataStorage blockData, boolean instantlyBroken, BlockFace face) {
+		super(pos.getBlock(), player);
 		this.blockData = blockData;
 		isInstant = instantlyBroken;
 		this.face = face;
@@ -28,6 +29,10 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 
 	public LootTable getLoot() {
 		return loot;
+	}
+
+	public Position getPosition() {
+		return pos;
 	}
 
 	public BlockFace getBlockFace() {

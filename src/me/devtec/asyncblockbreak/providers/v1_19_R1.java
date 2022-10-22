@@ -563,7 +563,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 
 	private void processBlockBreak(PacketPlayInBlockDig packet, Player player, EntityPlayer nmsPlayer, IBlockData iblockdata, BlockPosition blockPos, Position pos, boolean dropItems,
 			boolean instantlyBroken) {
-		AsyncBlockBreakEvent event = new AsyncBlockBreakEvent(pos.getBlock(), player, BukkitLoader.getNmsProvider().toMaterial(iblockdata), instantlyBroken, BlockFace.valueOf(packet.c().name()));
+		AsyncBlockBreakEvent event = new AsyncBlockBreakEvent(pos, player, BukkitLoader.getNmsProvider().toMaterial(iblockdata), instantlyBroken, BlockFace.valueOf(packet.c().name()));
 		event.setTileDrops(!Loader.DISABLE_TILE_DROPS);
 		if (instantlyBroken) {
 			PlayerInteractEvent interactEvent = new PlayerInteractEvent(player, Action.LEFT_CLICK_BLOCK, player.getItemInHand(), pos.getBlock(), event.getBlockFace());

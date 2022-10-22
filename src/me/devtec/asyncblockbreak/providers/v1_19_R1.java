@@ -15,7 +15,10 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.entity.ExperienceOrb;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
+import org.bukkit.event.Event.Result;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockExpEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemDamageEvent;
 import org.bukkit.inventory.ItemStack;
 
@@ -41,9 +44,17 @@ import net.minecraft.world.entity.item.EntityFallingBlock;
 import net.minecraft.world.item.enchantment.EnchantmentDurability;
 import net.minecraft.world.item.enchantment.EnchantmentManager;
 import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.GeneratorAccess;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.BlockBannerWall;
+import net.minecraft.world.level.block.BlockCobbleWall;
+import net.minecraft.world.level.block.BlockCoralFanWallAbstract;
+import net.minecraft.world.level.block.BlockFacingHorizontal;
 import net.minecraft.world.level.block.BlockLeaves;
+import net.minecraft.world.level.block.BlockRedstoneTorchWall;
 import net.minecraft.world.level.block.BlockTall;
 import net.minecraft.world.level.block.BlockTileEntity;
+import net.minecraft.world.level.block.BlockTorchWall;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.TileEntity;
 import net.minecraft.world.level.block.entity.TileEntityChest;
@@ -51,9 +62,11 @@ import net.minecraft.world.level.block.entity.TileEntityContainer;
 import net.minecraft.world.level.block.entity.TileEntityShulkerBox;
 import net.minecraft.world.level.block.state.IBlockData;
 import net.minecraft.world.level.block.state.properties.BlockProperties;
+import net.minecraft.world.level.block.state.properties.BlockPropertyAttachPosition;
 import net.minecraft.world.level.block.state.properties.BlockPropertyBedPart;
 import net.minecraft.world.level.block.state.properties.BlockPropertyChestType;
 import net.minecraft.world.level.block.state.properties.BlockPropertyDoubleBlockHalf;
+import net.minecraft.world.level.block.state.properties.BlockPropertyWallHeight;
 import net.minecraft.world.level.block.state.properties.IBlockState;
 import net.minecraft.world.level.chunk.Chunk;
 
@@ -65,11 +78,15 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	// vines
 	static IBlockState<Boolean> east = BlockProperties.N, north = BlockProperties.M, south = BlockProperties.O, west = BlockProperties.P, up = BlockProperties.K;
 	static IBlockState<EnumDirection> vertical_direction = BlockProperties.bn;
+	static IBlockState<BlockPropertyWallHeight> wall_east = BlockProperties.W, wall_north = BlockProperties.X, wall_south = BlockProperties.Y, wall_west = BlockProperties.Z;
 	@SuppressWarnings("unchecked")
 	static IBlockState<Boolean>[] BLOCK_ROTATIONS = new IBlockState[] { east, north, south, west };
+	@SuppressWarnings("unchecked")
+	static IBlockState<BlockPropertyWallHeight>[] WALL_BLOCK_ROTATIONS = new IBlockState[] { wall_east, wall_north, wall_south, wall_west };
+	static IBlockState<BlockPropertyAttachPosition> attach = BlockProperties.U;
 	static Field async = Ref.field(Event.class, "async");
 
-	private void destroyAround(Material blockType, Position pos, Player player, LootTable items, boolean dropItems) {
+	private void destroyAround(Material blockType, EnumDirection dir, Position pos, Player player, LootTable items, boolean dropItems) {
 		// FIX PLANT
 		fixPlantIfType(pos, blockType);
 
@@ -105,7 +122,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 						items.add(item);
 				clone.setAirAndUpdate(false);
 				if (type == Material.CHORUS_PLANT)
-					destroyAround(type, clone, player, items, dropItems);
+					destroyAround(type, null, clone, player, items, dropItems);
 			} else if (isBed(type))
 				destroyBed(player, clone, blockData, items, dropItems);
 			else if (type == Material.TWISTING_VINES || type == Material.TWISTING_VINES_PLANT || type == Material.SUGAR_CANE || type == Material.BAMBOO || type == Material.KELP
@@ -125,6 +142,13 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					for (ItemStack item : clone.getBlock().getDrops())
 						items.add(item);
 				destroyDoubleBlock(isWaterlogged(blockData), player, clone, blockData, items, dropItems);
+			} else if (blockData.b() instanceof BlockFacingHorizontal || blockData.b() instanceof BlockCoralFanWallAbstract) {
+				if (blockData.c(attach) == BlockPropertyAttachPosition.a) {
+					if (dropItems)
+						for (ItemStack item : clone.getBlock().getDrops())
+							items.add(item);
+					removeBlock(clone, isWaterlogged(blockData));
+				}
 			} else if (!type.isSolid() && !type.name().contains("WALL_") && !(type == Material.WEEPING_VINES || type == Material.WEEPING_VINES_PLANT) && !type.name().endsWith("_HEAD")) {
 				if (dropItems)
 					for (ItemStack item : clone.getBlock().getDrops())
@@ -151,6 +175,10 @@ public class v1_19_R1 implements BlockDestroyHandler {
 						break;
 					}
 				}
+			} else if (blockData.b() instanceof BlockCobbleWall wall) {
+				blockData = Block.b(blockData, (GeneratorAccess) ((CraftWorld) clone.getWorld()).getHandle(), (BlockPosition) clone.getBlockPosition());
+				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), blockData);
+				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), new PacketPlayOutBlockChange((BlockPosition) clone.getBlockPosition(), blockData));
 			} else if (type == Material.NETHER_PORTAL) {
 				clone.setAirAndUpdate(false);
 				removeAllSurroundingPortals(clone);
@@ -170,9 +198,18 @@ public class v1_19_R1 implements BlockDestroyHandler {
 						items.add(item);
 				clone.setAirAndUpdate(false);
 				if (type == Material.CHORUS_PLANT)
-					destroyAround(type, clone, player, items, dropItems);
-			} else if (!type.isSolid() || type == Material.COCOA)
-				if (type.name().contains("WALL_") || type == Material.COCOA) {
+					destroyAround(type, null, clone, player, items, dropItems);
+
+			} else if (blockData.b() instanceof BlockRedstoneTorchWall || blockData.b() instanceof BlockTorchWall || blockData.b() instanceof BlockBannerWall) {
+				BlockFace bface = BlockFace.valueOf(blockData.c(direction).name());
+				if (clone.getBlockX() - bface.getModX() == pos.getBlockX() && clone.getBlockZ() - bface.getModZ() == pos.getBlockZ()) {
+					if (dropItems)
+						for (ItemStack item : clone.getBlock().getDrops())
+							items.add(item);
+					removeBlock(clone, isWaterlogged(blockData));
+				}
+			} else if (blockData.b() instanceof BlockFacingHorizontal || blockData.b() instanceof BlockCoralFanWallAbstract) {
+				if (blockData.c(attach) == BlockPropertyAttachPosition.b) {
 					BlockFace bface = BlockFace.valueOf(blockData.c(direction).name());
 					if (type == Material.COCOA)
 						bface = bface.getOppositeFace();
@@ -182,14 +219,15 @@ public class v1_19_R1 implements BlockDestroyHandler {
 								items.add(item);
 						removeBlock(clone, isWaterlogged(blockData));
 					}
-				} else if ((type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN) && !blockBehindOrAbove(clone, blockData)) {
-					removeBlock(clone, isWaterlogged(blockData));
-					clone.setY(clone.getY() - 1);
-					blockData = (IBlockData) clone.getIBlockData();
-					type = blockData.getBukkitMaterial();
-					if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN)
-						destroyVine(clone, blockData);
 				}
+			} else if ((type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN) && !blockBehindOrAbove(clone, blockData)) {
+				removeBlock(clone, isWaterlogged(blockData));
+				clone.setY(clone.getY() - 1);
+				blockData = (IBlockData) clone.getIBlockData();
+				type = blockData.getBukkitMaterial();
+				if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN)
+					destroyVine(clone, blockData);
+			}
 		}
 
 		// down
@@ -240,7 +278,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 						items.add(item);
 				clone.setAirAndUpdate(false);
 				if (type == Material.CHORUS_PLANT)
-					destroyAround(type, clone, player, items, dropItems);
+					destroyAround(type, null, clone, player, items, dropItems);
 			} else if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN) {
 				if (!blockBehindOrAbove(clone, blockData)) {
 					removeBlock(clone, isWaterlogged(blockData));
@@ -249,6 +287,13 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					type = blockData.getBukkitMaterial();
 					if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN)
 						destroyVine(clone, blockData);
+				}
+			} else if (blockData.b() instanceof BlockFacingHorizontal || blockData.b() instanceof BlockCoralFanWallAbstract) {
+				if (blockData.c(attach) == BlockPropertyAttachPosition.c) {
+					if (dropItems)
+						for (ItemStack item : clone.getBlock().getDrops())
+							items.add(item);
+					removeBlock(clone, isWaterlogged(blockData));
 				}
 			} else
 				while (type == Material.WEEPING_VINES || type == Material.WEEPING_VINES_PLANT) {
@@ -408,7 +453,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				for (net.minecraft.world.item.ItemStack item : inv.getContents())
 					loot.add(CraftItemStack.asBukkitCopy(item));
 			pos.setAirAndUpdate(false);
-			destroyAround(material, pos, player, loot, breakEvent.isDropItems());
+			destroyAround(material, packet.c(), pos, player, loot, breakEvent.isDropItems());
 			pos.updatePhysics(prev);
 		} else if (isDoubleBlock(material)) { // plant or door
 			destroyDoubleBlock(isWaterlogged(iblockdata), player, pos, iblockdata, loot, breakEvent.isDropItems());
@@ -421,7 +466,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			// Set block to air/water & update nearby blocks
 			removeBlock(pos, isWaterlogged(iblockdata));
 			if (material.isSolid() && !material.isAir() && !material.name().contains("WALL_"))
-				destroyAround(material, pos, player, loot, breakEvent.isDropItems());
+				destroyAround(material, packet.c(), pos, player, loot, breakEvent.isDropItems());
 			else if (material == Material.NETHER_PORTAL)
 				removeAllSurroundingPortals(pos);
 			pos.updatePhysics(prev);
@@ -520,6 +565,46 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			boolean instantlyBroken) {
 		AsyncBlockBreakEvent event = new AsyncBlockBreakEvent(pos.getBlock(), player, BukkitLoader.getNmsProvider().toMaterial(iblockdata), instantlyBroken, BlockFace.valueOf(packet.c().name()));
 		event.setTileDrops(!Loader.DISABLE_TILE_DROPS);
+		if (instantlyBroken) {
+			PlayerInteractEvent interactEvent = new PlayerInteractEvent(player, Action.LEFT_CLICK_BLOCK, player.getItemInHand(), pos.getBlock(), event.getBlockFace());
+			if (PlayerInteractEvent.getHandlerList().getRegisteredListeners().length > 0) {
+				if (Loader.SYNC_EVENT) {
+					BukkitLoader.getNmsProvider().postToMainThread(() -> {
+						Bukkit.getPluginManager().callEvent(interactEvent);
+						if (interactEvent.isCancelled() || interactEvent.useInteractedBlock() == Result.DENY) {
+							sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
+							return;
+						}
+						// Drop exp only in survival / adventure gamemode
+						if (player.getGameMode() == GameMode.ADVENTURE || player.getGameMode() == GameMode.SURVIVAL)
+							if (nmsPlayer.d(iblockdata.b().m()))
+								event.setExpToDrop(iblockdata.b().getExpDrop(iblockdata, nmsPlayer.x(), blockPos, CraftItemStack.asNMSCopy(player.getItemInHand()), true));
+
+						// Do not call event if isn't registered any listener - instantly process async
+						if (BlockExpEvent.getHandlerList().getRegisteredListeners().length == 0) {
+							event.setDropItems(dropItems);
+							Ref.set(event, async, true);
+							breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
+							return;
+						}
+						Bukkit.getPluginManager().callEvent(event);
+						if (event.isCancelled()) {
+							sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
+							return;
+						}
+						event.setDropItems(dropItems);
+						breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
+					});
+					return;
+				}
+				Ref.set(interactEvent, async, true);
+				Bukkit.getPluginManager().callEvent(interactEvent);
+				if (event.isCancelled()) {
+					sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
+					return;
+				}
+			}
+		}
 
 		// Drop exp only in survival / adventure gamemode
 		if (player.getGameMode() == GameMode.ADVENTURE || player.getGameMode() == GameMode.SURVIVAL)

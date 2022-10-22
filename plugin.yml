@@ -1,6 +1,6 @@
 name: AsyncBlockBreak
 main: me.devtec.asyncblockbreak.Loader
-version: 1.7
+version: 1.8
 author: StraikerinaCZ
 api-version: 1.19
 depend: [TheAPI]

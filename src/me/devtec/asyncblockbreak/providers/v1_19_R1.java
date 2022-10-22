@@ -1,6 +1,7 @@
 package me.devtec.asyncblockbreak.providers;
 
 import java.lang.reflect.Field;
+import java.util.Objects;
 
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
@@ -13,6 +14,8 @@ import org.bukkit.craftbukkit.v1_19_R1.inventory.CraftItemStack;
 import org.bukkit.craftbukkit.v1_19_R1.util.CraftMagicNumbers;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.ExperienceOrb;
+import org.bukkit.entity.ItemFrame;
+import org.bukkit.entity.Painting;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.Event.Result;
@@ -40,10 +43,12 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.EntityPlayer;
 import net.minecraft.server.level.WorldServer;
 import net.minecraft.world.EnumHand;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.EntityFallingBlock;
 import net.minecraft.world.item.enchantment.EnchantmentDurability;
 import net.minecraft.world.item.enchantment.EnchantmentManager;
 import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.ChunkCoordIntPair;
 import net.minecraft.world.level.GeneratorAccess;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.BlockBannerWall;
@@ -70,6 +75,7 @@ import net.minecraft.world.level.block.state.properties.BlockPropertyDoubleBlock
 import net.minecraft.world.level.block.state.properties.BlockPropertyWallHeight;
 import net.minecraft.world.level.block.state.properties.IBlockState;
 import net.minecraft.world.level.chunk.Chunk;
+import net.minecraft.world.level.entity.PersistentEntitySectionManager;
 
 public class v1_19_R1 implements BlockDestroyHandler {
 	static IBlockState<EnumDirection> direction = BlockProperties.S;
@@ -95,7 +101,32 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		Position clone = pos.clone().add(0, 1, 0);
 		IBlockData blockData = (IBlockData) clone.getIBlockData();
 		Material type = blockData.getBukkitMaterial();
-		if (!(type == Material.WATER || type == Material.LAVA || type.isAir()))
+		if (!(type == Material.WATER || type == Material.LAVA || type.isAir())) {
+			Chunk chunk = (Chunk) clone.getNMSChunk();
+			if (Ref.getClass("io.papermc.paper.chunk.system.scheduling.NewChunkHolder") != null) {
+				for (org.bukkit.entity.Entity entity : chunk.getChunkHolder().getEntityChunk().getChunkEntities())
+					if (entity instanceof ItemFrame frame) {
+						Location loc = entity.getLocation().add(frame.getAttachedFace().getDirection());
+						if (loc.getBlockX() == pos.getBlockX() && loc.getBlockY() == pos.getBlockY() && loc.getBlockZ() == pos.getBlockZ()) {
+							items.add(frame.getItem());
+							items.add(new ItemStack(Material.ITEM_FRAME));
+							frame.remove();
+						}
+					}
+			} else {
+				@SuppressWarnings("unchecked")
+				PersistentEntitySectionManager<Entity> entityManager = (PersistentEntitySectionManager<Entity>) Ref.get(((CraftWorld) pos.getWorld()).getHandle(), "P");
+				for (org.bukkit.entity.Entity entity : entityManager.getEntities(new ChunkCoordIntPair(clone.getBlockX() >> 4, clone.getBlockZ() >> 4)).stream().map(Entity::getBukkitEntity)
+						.filter(Objects::nonNull).toArray(paramInt -> new org.bukkit.entity.Entity[paramInt]))
+					if (entity instanceof ItemFrame frame) {
+						Location loc = entity.getLocation().add(frame.getAttachedFace().getDirection());
+						if (loc.getBlockX() == pos.getBlockX() && loc.getBlockY() == pos.getBlockY() && loc.getBlockZ() == pos.getBlockZ()) {
+							items.add(frame.getItem());
+							items.add(new ItemStack(Material.ITEM_FRAME));
+							frame.remove();
+						}
+					}
+			}
 			if (type == Material.NETHER_PORTAL) {
 				clone.setAirAndUpdate(false);
 				removeAllSurroundingPortals(clone);
@@ -156,6 +187,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 						items.add(item);
 				removeBlock(clone, isWaterlogged(blockData));
 			}
+		}
 		// sides
 		for (BlockFace face : faces) {
 			clone = pos.clone().add(face.getModX(), face.getModY(), face.getModZ());
@@ -163,6 +195,43 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			type = blockData.getBukkitMaterial();
 			if (type == Material.WATER || type == Material.LAVA || type.isAir()) // fast skip
 				continue;
+			Chunk chunk = (Chunk) clone.getNMSChunk();
+			if (Ref.getClass("io.papermc.paper.chunk.system.scheduling.NewChunkHolder") != null) {
+				for (org.bukkit.entity.Entity entity : chunk.getChunkHolder().getEntityChunk().getChunkEntities())
+					if (entity instanceof ItemFrame frame) {
+						Location loc = entity.getLocation().add(frame.getAttachedFace().getDirection());
+						if (loc.getBlockX() == pos.getBlockX() && loc.getBlockY() == pos.getBlockY() && loc.getBlockZ() == pos.getBlockZ()) {
+							items.add(frame.getItem());
+							items.add(new ItemStack(Material.ITEM_FRAME));
+							frame.remove();
+						}
+					} else if (entity instanceof Painting paint) {
+						Location loc = entity.getLocation().add(paint.getAttachedFace().getDirection());
+						if (loc.getBlockX() == pos.getBlockX() && loc.getBlockY() == pos.getBlockY() && loc.getBlockZ() == pos.getBlockZ()) {
+							items.add(new ItemStack(Material.PAINTING));
+							paint.remove();
+						}
+					}
+			} else {
+				@SuppressWarnings("unchecked")
+				PersistentEntitySectionManager<Entity> entityManager = (PersistentEntitySectionManager<Entity>) Ref.get(((CraftWorld) pos.getWorld()).getHandle(), "P");
+				for (org.bukkit.entity.Entity entity : entityManager.getEntities(new ChunkCoordIntPair(clone.getBlockX() >> 4, clone.getBlockZ() >> 4)).stream().map(Entity::getBukkitEntity)
+						.filter(Objects::nonNull).toArray(paramInt -> new org.bukkit.entity.Entity[paramInt]))
+					if (entity instanceof ItemFrame frame) {
+						Location loc = entity.getLocation().add(frame.getAttachedFace().getDirection());
+						if (loc.getBlockX() == pos.getBlockX() && loc.getBlockY() == pos.getBlockY() && loc.getBlockZ() == pos.getBlockZ()) {
+							items.add(frame.getItem());
+							items.add(new ItemStack(Material.ITEM_FRAME));
+							frame.remove();
+						}
+					} else if (entity instanceof Painting paint) {
+						Location loc = entity.getLocation().add(paint.getAttachedFace().getDirection());
+						if (loc.getBlockX() == pos.getBlockX() && loc.getBlockY() == pos.getBlockY() && loc.getBlockZ() == pos.getBlockZ()) {
+							items.add(new ItemStack(Material.PAINTING));
+							paint.remove();
+						}
+					}
+			}
 			if (blockData.b() instanceof BlockTall tall) {
 				int stateId = 0;
 				for (IBlockState<Boolean> state : BLOCK_ROTATIONS) {
@@ -236,7 +305,32 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		clone = pos.clone().add(0, -1, 0);
 		blockData = (IBlockData) clone.getIBlockData();
 		type = blockData.getBukkitMaterial();
-		if (!(type == Material.WATER || type == Material.LAVA))
+		if (!(type == Material.WATER || type == Material.LAVA)) {
+			Chunk chunk = (Chunk) clone.getNMSChunk();
+			if (Ref.getClass("io.papermc.paper.chunk.system.scheduling.NewChunkHolder") != null) {
+				for (org.bukkit.entity.Entity entity : chunk.getChunkHolder().getEntityChunk().getChunkEntities())
+					if (entity instanceof ItemFrame frame) {
+						Location loc = entity.getLocation().add(frame.getAttachedFace().getDirection());
+						if (loc.getBlockX() == pos.getBlockX() && loc.getBlockY() == pos.getBlockY() && loc.getBlockZ() == pos.getBlockZ()) {
+							items.add(frame.getItem());
+							items.add(new ItemStack(Material.ITEM_FRAME));
+							frame.remove();
+						}
+					}
+			} else {
+				@SuppressWarnings("unchecked")
+				PersistentEntitySectionManager<Entity> entityManager = (PersistentEntitySectionManager<Entity>) Ref.get(((CraftWorld) pos.getWorld()).getHandle(), "P");
+				for (org.bukkit.entity.Entity entity : entityManager.getEntities(new ChunkCoordIntPair(clone.getBlockX() >> 4, clone.getBlockZ() >> 4)).stream().map(Entity::getBukkitEntity)
+						.filter(Objects::nonNull).toArray(paramInt -> new org.bukkit.entity.Entity[paramInt]))
+					if (entity instanceof ItemFrame frame) {
+						Location loc = entity.getLocation().add(frame.getAttachedFace().getDirection());
+						if (loc.getBlockX() == pos.getBlockX() && loc.getBlockY() == pos.getBlockY() && loc.getBlockZ() == pos.getBlockZ()) {
+							items.add(frame.getItem());
+							items.add(new ItemStack(Material.ITEM_FRAME));
+							frame.remove();
+						}
+					}
+			}
 			if (type == Material.NETHER_PORTAL) {
 				clone.setAirAndUpdate(false);
 				removeAllSurroundingPortals(clone);
@@ -306,6 +400,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					clone.setY(clone.getY() - 1);
 					type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
 				}
+		}
 	}
 
 	private void removeAllSurroundingPortals(Position pos) {
@@ -489,12 +584,12 @@ public class v1_19_R1 implements BlockDestroyHandler {
 
 		// Drop items & exp
 		Location dropLoc = pos.add(0.5, 0, 0.5).toLocation();
-		if (!loot.getItems().isEmpty() || breakEvent.getExpToDrop() > 0)
+		if (!loot.getItems().isEmpty() && breakEvent.isDropItems() || breakEvent.getExpToDrop() > 0)
 			if (Bukkit.isPrimaryThread()) {
 
 				// Do not call event if isn't registered any listener
 				if (BlockBreakDropItemsEvent.getHandlerList().getRegisteredListeners().length == 0) {
-					if (!loot.getItems().isEmpty())
+					if (!loot.getItems().isEmpty() && breakEvent.isDropItems())
 						for (ItemStack drop : loot.getItems())
 							player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
 					if (breakEvent.getExpToDrop() > 0)
@@ -504,7 +599,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 						});
 					return;
 				}
-				if (!loot.getItems().isEmpty()) {
+				if (!loot.getItems().isEmpty() && breakEvent.isDropItems()) {
 					BlockBreakDropItemsEvent event = new BlockBreakDropItemsEvent(breakEvent, loot);
 					Bukkit.getPluginManager().callEvent(event);
 					if (!event.isCancelled())
@@ -521,7 +616,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 
 					// Do not call event if isn't registered any listener
 					if (BlockBreakDropItemsEvent.getHandlerList().getRegisteredListeners().length == 0) {
-						if (!loot.getItems().isEmpty())
+						if (!loot.getItems().isEmpty() && breakEvent.isDropItems())
 							for (ItemStack drop : loot.getItems())
 								player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
 						if (breakEvent.getExpToDrop() > 0)
@@ -531,7 +626,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 							});
 						return;
 					}
-					if (!loot.getItems().isEmpty()) {
+					if (!loot.getItems().isEmpty() && breakEvent.isDropItems()) {
 						BlockBreakDropItemsEvent event = new BlockBreakDropItemsEvent(breakEvent, loot);
 						Bukkit.getPluginManager().callEvent(event);
 						if (!event.isCancelled())
@@ -567,6 +662,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			boolean instantlyBroken) {
 		AsyncBlockBreakEvent event = new AsyncBlockBreakEvent(pos, player, BukkitLoader.getNmsProvider().toMaterial(iblockdata), instantlyBroken, BlockFace.valueOf(packet.c().name()));
 		event.setTileDrops(!Loader.DISABLE_TILE_DROPS);
+		event.setDropItems(dropItems);
 		if (instantlyBroken) {
 			PlayerInteractEvent interactEvent = new PlayerInteractEvent(player, Action.LEFT_CLICK_BLOCK, player.getItemInHand(), pos.getBlock(), event.getBlockFace());
 			if (PlayerInteractEvent.getHandlerList().getRegisteredListeners().length > 0) {
@@ -584,7 +680,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 
 						// Do not call event if isn't registered any listener - instantly process async
 						if (BlockExpEvent.getHandlerList().getRegisteredListeners().length == 0) {
-							event.setDropItems(dropItems);
 							Ref.set(event, async, true);
 							breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
 							return;
@@ -594,7 +689,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 							sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
 							return;
 						}
-						event.setDropItems(dropItems);
 						breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
 					});
 					return;
@@ -615,7 +709,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 
 		// Do not call event if isn't registered any listener - instantly process async
 		if (BlockExpEvent.getHandlerList().getRegisteredListeners().length == 0) {
-			event.setDropItems(dropItems);
 			Ref.set(event, async, true);
 			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
 			return;
@@ -628,7 +721,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
 					return;
 				}
-				event.setDropItems(dropItems);
 				breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
 			});
 		else {
@@ -638,7 +730,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
 				return;
 			}
-			event.setDropItems(dropItems);
 			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
 		}
 	}

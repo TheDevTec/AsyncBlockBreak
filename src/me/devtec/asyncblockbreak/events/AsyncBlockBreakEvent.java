@@ -25,6 +25,7 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 		isInstant = instantlyBroken;
 		this.pos = pos;
 		this.face = face;
+		tileDrops = true;
 		loot = new LootTable();
 	}
 

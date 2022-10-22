@@ -23,6 +23,7 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 		super(pos.getBlock(), player);
 		this.blockData = blockData;
 		isInstant = instantlyBroken;
+		this.pos = pos;
 		this.face = face;
 		loot = new LootTable();
 	}

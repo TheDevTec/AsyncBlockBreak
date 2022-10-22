@@ -55,6 +55,7 @@ import net.minecraft.world.level.block.BlockRedstoneTorchWall;
 import net.minecraft.world.level.block.BlockTall;
 import net.minecraft.world.level.block.BlockTileEntity;
 import net.minecraft.world.level.block.BlockTorchWall;
+import net.minecraft.world.level.block.BlockWallSign;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.TileEntity;
 import net.minecraft.world.level.block.entity.TileEntityChest;
@@ -200,7 +201,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				if (type == Material.CHORUS_PLANT)
 					destroyAround(type, null, clone, player, items, dropItems);
 
-			} else if (blockData.b() instanceof BlockRedstoneTorchWall || blockData.b() instanceof BlockTorchWall || blockData.b() instanceof BlockBannerWall) {
+			} else if (blockData.b() instanceof BlockRedstoneTorchWall || blockData.b() instanceof BlockWallSign || blockData.b() instanceof BlockTorchWall
+					|| blockData.b() instanceof BlockBannerWall) {
 				BlockFace bface = BlockFace.valueOf(blockData.c(direction).name());
 				if (clone.getBlockX() - bface.getModX() == pos.getBlockX() && clone.getBlockZ() - bface.getModZ() == pos.getBlockZ()) {
 					if (dropItems)

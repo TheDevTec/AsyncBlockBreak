@@ -35,6 +35,7 @@ import me.devtec.theapi.bukkit.BukkitLoader;
 import me.devtec.theapi.bukkit.game.Position;
 import net.minecraft.core.BlockPosition;
 import net.minecraft.core.EnumDirection;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.protocol.game.ClientboundBlockChangedAckPacket;
 import net.minecraft.network.protocol.game.PacketPlayInBlockDig;
 import net.minecraft.network.protocol.game.PacketPlayInBlockDig.EnumPlayerDigType;
@@ -55,6 +56,7 @@ import net.minecraft.world.level.block.BlockBannerWall;
 import net.minecraft.world.level.block.BlockCobbleWall;
 import net.minecraft.world.level.block.BlockCoralFanWallAbstract;
 import net.minecraft.world.level.block.BlockFacingHorizontal;
+import net.minecraft.world.level.block.BlockLadder;
 import net.minecraft.world.level.block.BlockLeaves;
 import net.minecraft.world.level.block.BlockRedstoneTorchWall;
 import net.minecraft.world.level.block.BlockTall;
@@ -84,6 +86,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	static IBlockState<BlockPropertyChestType> chestType = BlockProperties.bd;
 	// vines
 	static IBlockState<Boolean> east = BlockProperties.N, north = BlockProperties.M, south = BlockProperties.O, west = BlockProperties.P, up = BlockProperties.K;
+	static IBlockState<Boolean> waterlogged = BlockProperties.C;
 	static IBlockState<EnumDirection> vertical_direction = BlockProperties.bn;
 	static IBlockState<BlockPropertyWallHeight> wall_east = BlockProperties.W, wall_north = BlockProperties.X, wall_south = BlockProperties.Y, wall_west = BlockProperties.Z;
 	@SuppressWarnings("unchecked")
@@ -93,6 +96,38 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	static IBlockState<BlockPropertyAttachPosition> attach = BlockProperties.U;
 	static Field async = Ref.field(Event.class, "async");
 
+	private void removeEntity(Position pos, LootTable items, org.bukkit.entity.Entity entity, boolean canBePainting) {
+		if (entity instanceof ItemFrame frame) {
+			Location loc = entity.getLocation().add(frame.getAttachedFace().getDirection());
+			if (loc.getBlockX() == pos.getBlockX() && loc.getBlockY() == pos.getBlockY() && loc.getBlockZ() == pos.getBlockZ()) {
+				items.add(frame.getItem());
+				items.add(new ItemStack(Material.ITEM_FRAME));
+				frame.remove();
+			}
+		}
+		if (canBePainting && entity instanceof Painting paint) {
+			Location loc = entity.getLocation().add(paint.getAttachedFace().getDirection());
+			if (loc.getBlockX() == pos.getBlockX() && loc.getBlockY() == pos.getBlockY() && loc.getBlockZ() == pos.getBlockZ()) {
+				items.add(new ItemStack(Material.PAINTING));
+				paint.remove();
+			}
+		}
+	}
+
+	private void removeEntitiesFrom(Position pos, Position clone, LootTable items, boolean painting) {
+		Chunk chunk = (Chunk) clone.getNMSChunk();
+		if (Ref.getClass("io.papermc.paper.chunk.system.scheduling.NewChunkHolder") != null)
+			for (org.bukkit.entity.Entity entity : chunk.getChunkHolder().getEntityChunk().getChunkEntities())
+				removeEntity(pos, items, entity, painting);
+		else {
+			@SuppressWarnings("unchecked")
+			PersistentEntitySectionManager<Entity> entityManager = (PersistentEntitySectionManager<Entity>) Ref.get(((CraftWorld) pos.getWorld()).getHandle(), "P");
+			for (org.bukkit.entity.Entity entity : entityManager.getEntities(new ChunkCoordIntPair(clone.getBlockX() >> 4, clone.getBlockZ() >> 4)).stream().map(Entity::getBukkitEntity)
+					.filter(Objects::nonNull).toArray(paramInt -> new org.bukkit.entity.Entity[paramInt]))
+				removeEntity(pos, items, entity, painting);
+		}
+	}
+
 	private void destroyAround(Material blockType, EnumDirection dir, Position pos, Player player, LootTable items, boolean dropItems) {
 		// FIX PLANT
 		fixPlantIfType(pos, blockType);
@@ -101,32 +136,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		Position clone = pos.clone().add(0, 1, 0);
 		IBlockData blockData = (IBlockData) clone.getIBlockData();
 		Material type = blockData.getBukkitMaterial();
-		if (!(type == Material.WATER || type == Material.LAVA || type.isAir())) {
-			Chunk chunk = (Chunk) clone.getNMSChunk();
-			if (Ref.getClass("io.papermc.paper.chunk.system.scheduling.NewChunkHolder") != null) {
-				for (org.bukkit.entity.Entity entity : chunk.getChunkHolder().getEntityChunk().getChunkEntities())
-					if (entity instanceof ItemFrame frame) {
-						Location loc = entity.getLocation().add(frame.getAttachedFace().getDirection());
-						if (loc.getBlockX() == pos.getBlockX() && loc.getBlockY() == pos.getBlockY() && loc.getBlockZ() == pos.getBlockZ()) {
-							items.add(frame.getItem());
-							items.add(new ItemStack(Material.ITEM_FRAME));
-							frame.remove();
-						}
-					}
-			} else {
-				@SuppressWarnings("unchecked")
-				PersistentEntitySectionManager<Entity> entityManager = (PersistentEntitySectionManager<Entity>) Ref.get(((CraftWorld) pos.getWorld()).getHandle(), "P");
-				for (org.bukkit.entity.Entity entity : entityManager.getEntities(new ChunkCoordIntPair(clone.getBlockX() >> 4, clone.getBlockZ() >> 4)).stream().map(Entity::getBukkitEntity)
-						.filter(Objects::nonNull).toArray(paramInt -> new org.bukkit.entity.Entity[paramInt]))
-					if (entity instanceof ItemFrame frame) {
-						Location loc = entity.getLocation().add(frame.getAttachedFace().getDirection());
-						if (loc.getBlockX() == pos.getBlockX() && loc.getBlockY() == pos.getBlockY() && loc.getBlockZ() == pos.getBlockZ()) {
-							items.add(frame.getItem());
-							items.add(new ItemStack(Material.ITEM_FRAME));
-							frame.remove();
-						}
-					}
-			}
+		if (!shouldSkip(type)) {
+			removeEntitiesFrom(pos, clone, items, false);
 			if (type == Material.NETHER_PORTAL) {
 				clone.setAirAndUpdate(false);
 				removeAllSurroundingPortals(clone);
@@ -138,8 +149,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					clone.setY(clone.getY() + 1);
 					type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
 				}
-			} else if (type == Material.AMETHYST_CLUSTER || type == Material.LARGE_AMETHYST_BUD || type == Material.MEDIUM_AMETHYST_BUD || type == Material.SMALL_AMETHYST_BUD
-					|| type == Material.BUDDING_AMETHYST) {
+			} else if (isAmethyst(type)) {
 				if (dropItems)
 					for (ItemStack item : clone.getBlock().getDrops())
 						items.add(item);
@@ -194,45 +204,9 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			clone = pos.clone().add(face.getModX(), face.getModY(), face.getModZ());
 			blockData = (IBlockData) clone.getIBlockData();
 			type = blockData.getBukkitMaterial();
-			if (type == Material.WATER || type == Material.LAVA || type.isAir()) // fast skip
+			if (shouldSkip(type)) // fast skip
 				continue;
-			Chunk chunk = (Chunk) clone.getNMSChunk();
-			if (Ref.getClass("io.papermc.paper.chunk.system.scheduling.NewChunkHolder") != null) {
-				for (org.bukkit.entity.Entity entity : chunk.getChunkHolder().getEntityChunk().getChunkEntities())
-					if (entity instanceof ItemFrame frame) {
-						Location loc = entity.getLocation().add(frame.getAttachedFace().getDirection());
-						if (loc.getBlockX() == pos.getBlockX() && loc.getBlockY() == pos.getBlockY() && loc.getBlockZ() == pos.getBlockZ()) {
-							items.add(frame.getItem());
-							items.add(new ItemStack(Material.ITEM_FRAME));
-							frame.remove();
-						}
-					} else if (entity instanceof Painting paint) {
-						Location loc = entity.getLocation().add(paint.getAttachedFace().getDirection());
-						if (loc.getBlockX() == pos.getBlockX() && loc.getBlockY() == pos.getBlockY() && loc.getBlockZ() == pos.getBlockZ()) {
-							items.add(new ItemStack(Material.PAINTING));
-							paint.remove();
-						}
-					}
-			} else {
-				@SuppressWarnings("unchecked")
-				PersistentEntitySectionManager<Entity> entityManager = (PersistentEntitySectionManager<Entity>) Ref.get(((CraftWorld) pos.getWorld()).getHandle(), "P");
-				for (org.bukkit.entity.Entity entity : entityManager.getEntities(new ChunkCoordIntPair(clone.getBlockX() >> 4, clone.getBlockZ() >> 4)).stream().map(Entity::getBukkitEntity)
-						.filter(Objects::nonNull).toArray(paramInt -> new org.bukkit.entity.Entity[paramInt]))
-					if (entity instanceof ItemFrame frame) {
-						Location loc = entity.getLocation().add(frame.getAttachedFace().getDirection());
-						if (loc.getBlockX() == pos.getBlockX() && loc.getBlockY() == pos.getBlockY() && loc.getBlockZ() == pos.getBlockZ()) {
-							items.add(frame.getItem());
-							items.add(new ItemStack(Material.ITEM_FRAME));
-							frame.remove();
-						}
-					} else if (entity instanceof Painting paint) {
-						Location loc = entity.getLocation().add(paint.getAttachedFace().getDirection());
-						if (loc.getBlockX() == pos.getBlockX() && loc.getBlockY() == pos.getBlockY() && loc.getBlockZ() == pos.getBlockZ()) {
-							items.add(new ItemStack(Material.PAINTING));
-							paint.remove();
-						}
-					}
-			}
+			removeEntitiesFrom(pos, clone, items, true);
 			if (blockData.b() instanceof BlockTall tall) {
 				int stateId = 0;
 				for (IBlockState<Boolean> state : BLOCK_ROTATIONS) {
@@ -253,8 +227,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			} else if (type == Material.NETHER_PORTAL) {
 				clone.setAirAndUpdate(false);
 				removeAllSurroundingPortals(clone);
-			} else if (type == Material.AMETHYST_CLUSTER || type == Material.LARGE_AMETHYST_BUD || type == Material.MEDIUM_AMETHYST_BUD || type == Material.SMALL_AMETHYST_BUD
-					|| type == Material.BUDDING_AMETHYST) {
+			} else if (isAmethyst(type)) {
 				if (dropItems)
 					for (ItemStack item : clone.getBlock().getDrops())
 						items.add(item);
@@ -271,8 +244,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				if (type == Material.CHORUS_PLANT)
 					destroyAround(type, null, clone, player, items, dropItems);
 
-			} else if (blockData.b() instanceof BlockRedstoneTorchWall || blockData.b() instanceof BlockWallSign || blockData.b() instanceof BlockTorchWall
-					|| blockData.b() instanceof BlockBannerWall) {
+			} else if (blockData.b() instanceof BlockRedstoneTorchWall || blockData.b() instanceof BlockWallSign || blockData.b() instanceof BlockTorchWall || blockData.b() instanceof BlockBannerWall
+					|| !Loader.LADDER_WORKS_AS_VINE && blockData.b() instanceof BlockLadder) {
 				BlockFace bface = BlockFace.valueOf(blockData.c(direction).name());
 				if (clone.getBlockX() - bface.getModX() == pos.getBlockX() && clone.getBlockZ() - bface.getModZ() == pos.getBlockZ()) {
 					if (dropItems)
@@ -281,7 +254,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					removeBlock(clone, isWaterlogged(blockData));
 				}
 			} else if (blockData.b() instanceof BlockFacingHorizontal || blockData.b() instanceof BlockCoralFanWallAbstract) {
-				if (blockData.c(attach) == BlockPropertyAttachPosition.b) {
+				if (type == Material.COCOA || blockData.c(attach) == BlockPropertyAttachPosition.b) {
 					BlockFace bface = BlockFace.valueOf(blockData.c(direction).name());
 					if (type == Material.COCOA)
 						bface = bface.getOppositeFace();
@@ -299,6 +272,13 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				type = blockData.getBukkitMaterial();
 				if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN)
 					destroyVine(clone, blockData);
+			} else if (Loader.LADDER_WORKS_AS_VINE && blockData.b() instanceof BlockLadder && !blockBehindOrAboveLadder(clone, blockData)) {
+				removeBlock(clone, isWaterlogged(blockData));
+				clone.setY(clone.getY() - 1);
+				blockData = (IBlockData) clone.getIBlockData();
+				type = blockData.getBukkitMaterial();
+				if (type == Material.LADDER)
+					destroyLadder(clone, blockData);
 			}
 		}
 
@@ -306,32 +286,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		clone = pos.clone().add(0, -1, 0);
 		blockData = (IBlockData) clone.getIBlockData();
 		type = blockData.getBukkitMaterial();
-		if (!(type == Material.WATER || type == Material.LAVA)) {
-			Chunk chunk = (Chunk) clone.getNMSChunk();
-			if (Ref.getClass("io.papermc.paper.chunk.system.scheduling.NewChunkHolder") != null) {
-				for (org.bukkit.entity.Entity entity : chunk.getChunkHolder().getEntityChunk().getChunkEntities())
-					if (entity instanceof ItemFrame frame) {
-						Location loc = entity.getLocation().add(frame.getAttachedFace().getDirection());
-						if (loc.getBlockX() == pos.getBlockX() && loc.getBlockY() == pos.getBlockY() && loc.getBlockZ() == pos.getBlockZ()) {
-							items.add(frame.getItem());
-							items.add(new ItemStack(Material.ITEM_FRAME));
-							frame.remove();
-						}
-					}
-			} else {
-				@SuppressWarnings("unchecked")
-				PersistentEntitySectionManager<Entity> entityManager = (PersistentEntitySectionManager<Entity>) Ref.get(((CraftWorld) pos.getWorld()).getHandle(), "P");
-				for (org.bukkit.entity.Entity entity : entityManager.getEntities(new ChunkCoordIntPair(clone.getBlockX() >> 4, clone.getBlockZ() >> 4)).stream().map(Entity::getBukkitEntity)
-						.filter(Objects::nonNull).toArray(paramInt -> new org.bukkit.entity.Entity[paramInt]))
-					if (entity instanceof ItemFrame frame) {
-						Location loc = entity.getLocation().add(frame.getAttachedFace().getDirection());
-						if (loc.getBlockX() == pos.getBlockX() && loc.getBlockY() == pos.getBlockY() && loc.getBlockZ() == pos.getBlockZ()) {
-							items.add(frame.getItem());
-							items.add(new ItemStack(Material.ITEM_FRAME));
-							frame.remove();
-						}
-					}
-			}
+		if (!shouldSkip(type)) {
+			removeEntitiesFrom(pos, clone, items, false);
 			if (type == Material.NETHER_PORTAL) {
 				clone.setAirAndUpdate(false);
 				removeAllSurroundingPortals(clone);
@@ -359,8 +315,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					blockData = (IBlockData) clone.getIBlockData();
 					type = blockData.getBukkitMaterial();
 				}
-			} else if (type == Material.AMETHYST_CLUSTER || type == Material.LARGE_AMETHYST_BUD || type == Material.MEDIUM_AMETHYST_BUD || type == Material.SMALL_AMETHYST_BUD
-					|| type == Material.BUDDING_AMETHYST) {
+			} else if (isAmethyst(type)) {
 				if (dropItems)
 					for (ItemStack item : clone.getBlock().getDrops())
 						items.add(item);
@@ -404,6 +359,15 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		}
 	}
 
+	private boolean isAmethyst(Material type) {
+		return type == Material.AMETHYST_CLUSTER || type == Material.LARGE_AMETHYST_BUD || type == Material.MEDIUM_AMETHYST_BUD || type == Material.SMALL_AMETHYST_BUD
+				|| type == Material.BUDDING_AMETHYST;
+	}
+
+	public boolean shouldSkip(Material type) {
+		return type == Material.WATER || type == Material.LAVA || type.isAir();
+	}
+
 	private void removeAllSurroundingPortals(Position pos) {
 		for (BlockFace face : all_faces) {
 			Position clone = pos.clone().add(face.getModX(), face.getModY(), face.getModZ());
@@ -431,6 +395,13 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		return false;
 	}
 
+	private boolean blockBehindOrAboveLadder(Position pos, IBlockData blockData) {
+		if (pos.clone().add(0, 1, 0).getBukkitType() == Material.LADDER
+				|| isSolid(pos.clone().add(BlockFace.valueOf(blockData.c(direction).name()).getModX(), 0, BlockFace.valueOf(blockData.c(direction).name()).getModZ())))
+			return true;
+		return false;
+	}
+
 	private void destroyVine(Position pos, IBlockData blockData) {
 		if (blockBehindOrAbove(pos, blockData))
 			return;
@@ -441,6 +412,18 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		Material type = blockData.getBukkitMaterial();
 		if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN)
 			destroyVine(pos, blockData);
+	}
+
+	private void destroyLadder(Position pos, IBlockData blockData) {
+		if (blockBehindOrAboveLadder(pos, blockData))
+			return;
+
+		removeBlock(pos, isWaterlogged(blockData));
+		pos = pos.clone().setY(pos.getY() - 1);
+		blockData = (IBlockData) pos.getIBlockData();
+		Material type = blockData.getBukkitMaterial();
+		if (type == Material.LADDER)
+			destroyLadder(pos, blockData);
 	}
 
 	private static void destroyBed(Player player, Position clone, IBlockData blockData, LootTable items, boolean dropItems) {
@@ -466,7 +449,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				for (net.minecraft.world.item.ItemStack nmsItem : tile.getContents())
 					items.add(CraftItemStack.asBukkitCopy(nmsItem));
 		}
-		removeBlock(pos, isWaterlogged(iblockdata));
 
 		if (chesttype == BlockPropertyChestType.c) {
 			Position clone = pos.clone();
@@ -486,10 +468,15 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			default:
 				break;
 			}
+			TileEntityChest tile = (TileEntityChest) ((Chunk) pos.getNMSChunk()).c_((BlockPosition) clone.getBlockPosition());
+			NBTTagCompound tag = tile.o();
+			removeBlock(pos, isWaterlogged(iblockdata));
 			IBlockData data = (IBlockData) clone.getIBlockData();
-			if (data.getBukkitMaterial() == Material.CHEST | data.getBukkitMaterial() == Material.TRAPPED_CHEST) {
+			if (data.getBukkitMaterial() == Material.CHEST || data.getBukkitMaterial() == Material.TRAPPED_CHEST) {
 				data = data.a(chestType, BlockPropertyChestType.a);
 				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), data);
+				tile = (TileEntityChest) ((Chunk) pos.getNMSChunk()).c_((BlockPosition) clone.getBlockPosition());
+				tile.a(tag);
 				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), new PacketPlayOutBlockChange((BlockPosition) clone.getBlockPosition(), data));
 			}
 		} else if (chesttype == BlockPropertyChestType.b) {
@@ -510,13 +497,19 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			default:
 				break;
 			}
+			TileEntityChest tile = (TileEntityChest) ((Chunk) pos.getNMSChunk()).c_((BlockPosition) clone.getBlockPosition());
+			NBTTagCompound tag = tile.o();
+			removeBlock(pos, isWaterlogged(iblockdata));
 			IBlockData data = (IBlockData) clone.getIBlockData();
-			if (data.getBukkitMaterial() == Material.CHEST | data.getBukkitMaterial() == Material.TRAPPED_CHEST) {
+			if (data.getBukkitMaterial() == Material.CHEST || data.getBukkitMaterial() == Material.TRAPPED_CHEST) {
 				data = data.a(chestType, BlockPropertyChestType.a);
 				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), data);
+				tile = (TileEntityChest) ((Chunk) pos.getNMSChunk()).c_((BlockPosition) clone.getBlockPosition());
+				tile.a(tag);
 				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), new PacketPlayOutBlockChange((BlockPosition) clone.getBlockPosition(), data));
 			}
-		}
+		} else
+			removeBlock(pos, isWaterlogged(iblockdata));
 	}
 
 	private void destroyDoubleBlock(boolean water, Player player, Position pos, IBlockData iblockdata, LootTable items, boolean dropItems) {
@@ -793,6 +786,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		if (data.getBukkitMaterial() == Material.SEAGRASS || data.getBukkitMaterial() == Material.TALL_SEAGRASS || data.getBukkitMaterial() == Material.KELP
 				|| data.getBukkitMaterial() == Material.KELP_PLANT)
 			return true;
-		return !data.b(BlockProperties.C) ? false : data.c(BlockProperties.C);
+		return !data.b(waterlogged) ? false : data.c(waterlogged);
 	}
 }

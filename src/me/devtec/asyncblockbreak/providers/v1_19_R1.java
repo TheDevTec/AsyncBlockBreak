@@ -53,6 +53,7 @@ import net.minecraft.world.level.ChunkCoordIntPair;
 import net.minecraft.world.level.GeneratorAccess;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.BlockBannerWall;
+import net.minecraft.world.level.block.BlockChorusFruit;
 import net.minecraft.world.level.block.BlockCobbleWall;
 import net.minecraft.world.level.block.BlockCoralFanWallAbstract;
 import net.minecraft.world.level.block.BlockFacingHorizontal;
@@ -114,6 +115,68 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		}
 	}
 
+	private void destroyChorusInit(Position start, IBlockData blockData, LootTable items, boolean dropItems, boolean destroy) {
+		if (destroy) {
+			if (dropItems)
+				for (ItemStack item : start.getBlock().getDrops())
+					items.add(item);
+			removeBlock(start, false);
+		}
+		boolean onEast = blockData.c(east);
+		boolean onNorth = blockData.c(north);
+		boolean onSouth = blockData.c(south);
+		boolean onWest = blockData.c(west);
+		boolean onTop = blockData.c(up);
+		if (onTop) {
+			destroyChorus(start.clone().add(0, 1, 0), items, dropItems, 1);
+			return;
+		}
+		if (onEast)
+			destroyChorus(start.clone().add(BlockFace.EAST.getModX(), 0, BlockFace.EAST.getModZ()), items, dropItems, 0);
+		if (onNorth)
+			destroyChorus(start.clone().add(BlockFace.NORTH.getModX(), 0, BlockFace.NORTH.getModZ()), items, dropItems, 0);
+		if (onSouth)
+			destroyChorus(start.clone().add(BlockFace.SOUTH.getModX(), 0, BlockFace.SOUTH.getModZ()), items, dropItems, 0);
+		if (onWest)
+			destroyChorus(start.clone().add(BlockFace.WEST.getModX(), 0, BlockFace.WEST.getModZ()), items, dropItems, 0);
+	}
+
+	private void destroyChorus(Position start, LootTable items, boolean dropItems, int direction) {
+		IBlockData blockData = (IBlockData) start.getIBlockData();
+		if (blockData.getBukkitMaterial() == Material.CHORUS_FLOWER || blockData.getBukkitMaterial() == Material.POPPED_CHORUS_FRUIT) {
+			if (dropItems)
+				for (ItemStack item : start.getBlock().getDrops())
+					items.add(item);
+			removeBlock(start, false);
+			return;
+		}
+		if (!(blockData.b() instanceof BlockChorusFruit))
+			return;
+		if (dropItems)
+			for (ItemStack item : start.getBlock().getDrops())
+				items.add(item);
+		removeBlock(start, false);
+		boolean onEast = blockData.c(east);
+		boolean onNorth = blockData.c(north);
+		boolean onSouth = blockData.c(south);
+		boolean onWest = blockData.c(west);
+		boolean onTop = blockData.c(up);
+		if (onTop) {
+			destroyChorus(start.clone().add(0, 1, 0), items, dropItems, 1);
+			return;
+		}
+		if (direction == 0)
+			return; // 2x to the side?
+		if (onEast)
+			destroyChorus(start.clone().add(BlockFace.EAST.getModX(), 0, BlockFace.EAST.getModZ()), items, dropItems, 0);
+		if (onNorth)
+			destroyChorus(start.clone().add(BlockFace.NORTH.getModX(), 0, BlockFace.NORTH.getModZ()), items, dropItems, 0);
+		if (onSouth)
+			destroyChorus(start.clone().add(BlockFace.SOUTH.getModX(), 0, BlockFace.SOUTH.getModZ()), items, dropItems, 0);
+		if (onWest)
+			destroyChorus(start.clone().add(BlockFace.WEST.getModX(), 0, BlockFace.WEST.getModZ()), items, dropItems, 0);
+	}
+
 	private void removeEntitiesFrom(Position pos, Position clone, LootTable items, boolean painting) {
 		Chunk chunk = (Chunk) clone.getNMSChunk();
 		if (Ref.getClass("io.papermc.paper.chunk.system.scheduling.NewChunkHolder") != null)
@@ -155,14 +218,9 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				BlockLeaves c = (BlockLeaves) blockData.b();
 				c.a(blockData, EnumDirection.a((BlockPosition) pos.getBlockPosition()), Blocks.a.m(), ((CraftWorld) clone.getWorld()).getHandle(), (BlockPosition) clone.getBlockPosition(),
 						(BlockPosition) clone.getBlockPosition());
-			} else if (type == Material.CHORUS_PLANT || type == Material.CHORUS_FLOWER) {
-				if (dropItems)
-					for (ItemStack item : clone.getBlock().getDrops())
-						items.add(item);
-				clone.setAirAndUpdate(false);
-				if (type == Material.CHORUS_PLANT)
-					destroyAround(type, null, clone, player, items, dropItems);
-			} else if (isBed(type))
+			} else if (type == Material.CHORUS_PLANT)
+				destroyChorusInit(clone, blockData, items, dropItems, true);
+			else if (isBed(type))
 				destroyBed(player, clone, blockData, items, dropItems);
 			else if (type == Material.TWISTING_VINES || type == Material.TWISTING_VINES_PLANT || type == Material.SUGAR_CANE || type == Material.BAMBOO || type == Material.KELP
 					|| type == Material.KELP_PLANT) {
@@ -213,14 +271,14 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					if (clone.getBlockX() - bface.getModX() == pos.getBlockX() && clone.getBlockZ() - bface.getModZ() == pos.getBlockZ()) {
 						blockData = blockData.a(state, false);
 						BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), blockData);
-						BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), new PacketPlayOutBlockChange((BlockPosition) clone.getBlockPosition(), blockData));
+						BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, blockData));
 						break;
 					}
 				}
 			} else if (blockData.b() instanceof BlockCobbleWall wall) {
 				blockData = Block.b(blockData, (GeneratorAccess) ((CraftWorld) clone.getWorld()).getHandle(), (BlockPosition) clone.getBlockPosition());
 				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), blockData);
-				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), new PacketPlayOutBlockChange((BlockPosition) clone.getBlockPosition(), blockData));
+				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, blockData));
 			} else if (type == Material.NETHER_PORTAL) {
 				clone.setAirAndUpdate(false);
 				removeAllSurroundingPortals(clone);
@@ -233,14 +291,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				BlockLeaves c = (BlockLeaves) blockData.b();
 				c.a(blockData, EnumDirection.a((BlockPosition) pos.getBlockPosition()), Blocks.a.m(), ((CraftWorld) clone.getWorld()).getHandle(), (BlockPosition) clone.getBlockPosition(),
 						(BlockPosition) clone.getBlockPosition());
-			} else if (type == Material.CHORUS_PLANT || type == Material.CHORUS_FLOWER) {
-				if (dropItems)
-					for (ItemStack item : clone.getBlock().getDrops())
-						items.add(item);
-				clone.setAirAndUpdate(false);
-				if (type == Material.CHORUS_PLANT)
-					destroyAround(type, null, clone, player, items, dropItems);
-
 			} else if (blockData.b() instanceof BlockRedstoneTorchWall || blockData.b() instanceof BlockWallSign || blockData.b() instanceof BlockTorchWall || blockData.b() instanceof BlockBannerWall
 					|| !Loader.LADDER_WORKS_AS_VINE && blockData.b() instanceof BlockLadder) {
 				BlockFace bface = BlockFace.valueOf(blockData.c(direction).name());
@@ -323,14 +373,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				BlockLeaves c = (BlockLeaves) blockData.b();
 				c.a(blockData, EnumDirection.a((BlockPosition) pos.getBlockPosition()), Blocks.a.m(), ((CraftWorld) clone.getWorld()).getHandle(), (BlockPosition) clone.getBlockPosition(),
 						(BlockPosition) clone.getBlockPosition());
-			} else if (type == Material.CHORUS_PLANT || type == Material.CHORUS_FLOWER) {
-				if (dropItems)
-					for (ItemStack item : clone.getBlock().getDrops())
-						items.add(item);
-				clone.setAirAndUpdate(false);
-				// TODO rework
-				if (type == Material.CHORUS_PLANT)
-					destroyAround(type, null, clone, player, items, dropItems);
 			} else if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN) {
 				if (!blockBehindOrAbove(clone, blockData)) {
 					removeBlock(clone, isWaterlogged(blockData));
@@ -479,7 +521,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), data);
 				tile = (TileEntityChest) ((Chunk) pos.getNMSChunk()).c_((BlockPosition) clone.getBlockPosition());
 				tile.a(tag);
-				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), new PacketPlayOutBlockChange((BlockPosition) clone.getBlockPosition(), data));
+				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, data));
 			}
 		} else if (chesttype == BlockPropertyChestType.b) {
 			Position clone = pos.clone();
@@ -508,7 +550,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), data);
 				tile = (TileEntityChest) ((Chunk) pos.getNMSChunk()).c_((BlockPosition) clone.getBlockPosition());
 				tile.a(tag);
-				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), new PacketPlayOutBlockChange((BlockPosition) clone.getBlockPosition(), data));
+				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, data));
 			}
 		} else
 			removeBlock(pos, isWaterlogged(iblockdata));
@@ -561,9 +603,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			Object prev = pos.getIBlockData();
 			// Set block to air/water & update nearby blocks
 			removeBlock(pos, isWaterlogged(iblockdata));
-			if (material.isSolid() && !material.isAir() && !material.name().contains("WALL_"))
-				destroyAround(material, packet.c(), pos, player, loot, breakEvent.isDropItems());
-			else if (material == Material.NETHER_PORTAL)
+			if (material == Material.NETHER_PORTAL)
 				removeAllSurroundingPortals(pos);
 			else if (Loader.LADDER_WORKS_AS_VINE && material == Material.LADDER) {
 				Position clone = pos.clone();
@@ -592,9 +632,70 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					clone.setY(clone.getY() - 1);
 					type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
 				}
-			} else if (material == Material.CHORUS_PLANT || material == Material.CHORUS_FLOWER)
-				// TODO rework
-				destroyAround(material, null, pos, player, loot, breakEvent.isDropItems());
+			} else if (material == Material.CHORUS_FLOWER || material == Material.POPPED_CHORUS_FRUIT) {
+				Position clone = pos.clone();
+				// top?
+				clone.add(0, -1, 0);
+				iblockdata = (IBlockData) clone.getIBlockData();
+				if (iblockdata.b() instanceof BlockChorusFruit) {
+					boolean on = iblockdata.c(up);
+					if (on) {
+						iblockdata = iblockdata.a(up, false);
+						BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), iblockdata);
+						BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, iblockdata));
+						return;
+					}
+				}
+				// east?
+				clone.add(BlockFace.NORTH.getModX(), 0, BlockFace.NORTH.getModZ());
+				iblockdata = (IBlockData) clone.getIBlockData();
+				if (iblockdata.b() instanceof BlockChorusFruit) {
+					boolean on = iblockdata.c(east);
+					if (on) {
+						iblockdata = iblockdata.a(east, false);
+						BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), iblockdata);
+						BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, iblockdata));
+						return;
+					}
+				}
+				// north?
+				clone.add(BlockFace.EAST.getModX(), 0, BlockFace.EAST.getModZ());
+				iblockdata = (IBlockData) clone.getIBlockData();
+				if (iblockdata.b() instanceof BlockChorusFruit) {
+					boolean on = iblockdata.c(north);
+					if (on) {
+						iblockdata = iblockdata.a(north, false);
+						BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), iblockdata);
+						BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, iblockdata));
+						return;
+					}
+				}
+				// west?
+				clone.add(BlockFace.SOUTH.getModX(), 0, BlockFace.SOUTH.getModZ());
+				iblockdata = (IBlockData) clone.getIBlockData();
+				if (iblockdata.b() instanceof BlockChorusFruit) {
+					boolean on = iblockdata.c(west);
+					if (on) {
+						iblockdata = iblockdata.a(west, false);
+						BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), iblockdata);
+						BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, iblockdata));
+						return;
+					}
+				}
+				// south?
+				clone.add(BlockFace.WEST.getModX(), 0, BlockFace.WEST.getModZ());
+				iblockdata = (IBlockData) clone.getIBlockData();
+				if (iblockdata.b() instanceof BlockChorusFruit) {
+					boolean on = iblockdata.c(south);
+					if (on) {
+						iblockdata = iblockdata.a(south, false);
+						BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), iblockdata);
+						BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, iblockdata));
+						return;
+					}
+				}
+			} else if (material == Material.CHORUS_PLANT)
+				destroyChorusInit(pos, iblockdata, loot, breakEvent.isDropItems(), false);
 			else if (material == Material.TWISTING_VINES || material == Material.TWISTING_VINES_PLANT || material == Material.SUGAR_CANE || material == Material.BAMBOO || material == Material.KELP
 					|| material == Material.KELP_PLANT) {
 				Position clone = pos.clone();
@@ -610,7 +711,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
 				}
 				fixPlantIfType(pos, material);
-			}
+			} else if (material.isSolid() && !material.isAir() && !material.name().contains("WALL_"))
+				destroyAround(material, packet.c(), pos, player, loot, breakEvent.isDropItems());
 			pos.updatePhysics(prev);
 		}
 		// Damage tool

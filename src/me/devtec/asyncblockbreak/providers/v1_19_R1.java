@@ -239,7 +239,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					for (ItemStack item : clone.getBlock().getDrops())
 						items.add(item);
 				destroyDoubleBlock(isWaterlogged(blockData), player, clone, blockData, items, dropItems);
-			} else if (blockData.b() instanceof BlockFacingHorizontal || blockData.b(attach) && blockData.b() instanceof BlockCoralFanWallAbstract) {
+			} else if (blockData.b(attach) && blockData.b() instanceof BlockFacingHorizontal || blockData.b() instanceof BlockCoralFanWallAbstract) {
 				if (blockData.c(attach) == BlockPropertyAttachPosition.a) {
 					if (dropItems)
 						for (ItemStack item : clone.getBlock().getDrops())
@@ -300,8 +300,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 							items.add(item);
 					removeBlock(clone, isWaterlogged(blockData));
 				}
-			} else if (blockData.b() instanceof BlockFacingHorizontal || blockData.b() instanceof BlockCoralFanWallAbstract) {
-				if (type == Material.COCOA || blockData.b(attach) && blockData.c(attach) == BlockPropertyAttachPosition.b) {
+			} else if (blockData.b(attach) && blockData.b() instanceof BlockFacingHorizontal || blockData.b() instanceof BlockCoralFanWallAbstract) {
+				if (type == Material.COCOA || blockData.c(attach) == BlockPropertyAttachPosition.b) {
 					BlockFace bface = BlockFace.valueOf(blockData.c(direction).name());
 					if (type == Material.COCOA)
 						bface = bface.getOppositeFace();
@@ -382,8 +382,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN)
 						destroyVine(clone, blockData);
 				}
-			} else if (blockData.b() instanceof BlockFacingHorizontal || blockData.b() instanceof BlockCoralFanWallAbstract) {
-				if (blockData.b(attach) && blockData.c(attach) == BlockPropertyAttachPosition.c) {
+			} else if (blockData.b(attach) && blockData.b() instanceof BlockFacingHorizontal || blockData.b() instanceof BlockCoralFanWallAbstract) {
+				if (blockData.c(attach) == BlockPropertyAttachPosition.c) {
 					if (dropItems)
 						for (ItemStack item : clone.getBlock().getDrops())
 							items.add(item);

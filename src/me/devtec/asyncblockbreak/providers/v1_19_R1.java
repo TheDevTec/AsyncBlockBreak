@@ -109,7 +109,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			Player player = Bukkit.getPlayer(playerName);
 			Position pos = new Position(player.getWorld(), blockPos.u(), blockPos.v(), blockPos.w());
 			IBlockData iblockdata = (IBlockData) pos.getIBlockData();
-			if (iblockdata.getBukkitMaterial() == Material.AIR || isInvalid(player, pos)) {
+			if (iblockdata.getBukkitMaterial().isAir() || isInvalid(player, pos)) {
 				sendCancelPackets(packet, player, blockPos, iblockdata);
 				return true;
 			}
@@ -126,7 +126,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			EntityPlayer nmsPlayer = ((CraftPlayer) player).getHandle();
 
 			if (player.getGameMode() == GameMode.CREATIVE) {
-				if (iblockdata.getBukkitMaterial() == Material.AIR || isInvalid(player, pos)) {
+				if (iblockdata.getBukkitMaterial().isAir() || isInvalid(player, pos)) {
 					sendCancelPackets(packet, player, blockPos, iblockdata);
 					return true;
 				}
@@ -136,7 +136,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			// iblockdata.a(nmsPlayer.s, blockPos, nmsPlayer); // hit block
 			float f = iblockdata.a(nmsPlayer, nmsPlayer.s, blockPos); // get damage
 			if (f >= 1.0F) {
-				if (iblockdata.getBukkitMaterial() == Material.AIR || isInvalid(player, pos)) {
+				if (iblockdata.getBukkitMaterial().isAir() || isInvalid(player, pos)) {
 					sendCancelPackets(packet, player, blockPos, iblockdata);
 					return true;
 				}

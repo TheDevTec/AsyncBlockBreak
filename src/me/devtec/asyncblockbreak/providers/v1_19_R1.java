@@ -98,8 +98,477 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	static IBlockState<BlockPropertyAttachPosition> attach = BlockProperties.U;
 	static Field async = Ref.field(Event.class, "async");
 
-	private static boolean IS_PAPER = Ref.getClass("io.papermc.paper.chunk.system.scheduling.NewChunkHolder") != null;
+	private boolean IS_PAPER = Ref.getClass("io.papermc.paper.chunk.system.scheduling.NewChunkHolder") != null;
+	private Field persistentEntitySectionManager = IS_PAPER ? null : Ref.field(Ref.nms("server.level", "WorldServer"), "P");
 
+	@Override
+	public boolean handle(String playerName, Object packetObject) {
+		PacketPlayInBlockDig packet = (PacketPlayInBlockDig) packetObject;
+		if (packet.d() == EnumPlayerDigType.c) { // stop
+			BlockPosition blockPos = packet.b();
+			Player player = Bukkit.getPlayer(playerName);
+			Position pos = new Position(player.getWorld(), blockPos.u(), blockPos.v(), blockPos.w());
+			IBlockData iblockdata = (IBlockData) pos.getIBlockData();
+			if (iblockdata.getBukkitMaterial() == Material.AIR || isInvalid(player, pos)) {
+				sendCancelPackets(packet, player, blockPos, iblockdata);
+				return true;
+			}
+
+			EntityPlayer nmsPlayer = ((CraftPlayer) player).getHandle();
+			processBlockBreak(packet, player, nmsPlayer, iblockdata, blockPos, pos, true, false);
+			return true;
+		}
+		if (packet.d() == EnumPlayerDigType.a) { // start
+			BlockPosition blockPos = packet.b();
+			Player player = Bukkit.getPlayer(playerName);
+			Position pos = new Position(player.getWorld(), blockPos.u(), blockPos.v(), blockPos.w());
+			IBlockData iblockdata = (IBlockData) pos.getIBlockData();
+			EntityPlayer nmsPlayer = ((CraftPlayer) player).getHandle();
+
+			if (player.getGameMode() == GameMode.CREATIVE) {
+				if (iblockdata.getBukkitMaterial() == Material.AIR || isInvalid(player, pos)) {
+					sendCancelPackets(packet, player, blockPos, iblockdata);
+					return true;
+				}
+				processBlockBreak(packet, player, nmsPlayer, iblockdata, blockPos, pos, false, true);
+				return true;
+			}
+			// iblockdata.a(nmsPlayer.s, blockPos, nmsPlayer); // hit block
+			float f = iblockdata.a(nmsPlayer, nmsPlayer.s, blockPos); // get damage
+			if (f >= 1.0F) {
+				if (iblockdata.getBukkitMaterial() == Material.AIR || isInvalid(player, pos)) {
+					sendCancelPackets(packet, player, blockPos, iblockdata);
+					return true;
+				}
+				processBlockBreak(packet, player, nmsPlayer, iblockdata, blockPos, pos, true, true);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * @apiNote Call AsyncBlockBreakEvent and convert whole block break to the sync
+	 *          if needed
+	 */
+	private void processBlockBreak(PacketPlayInBlockDig packet, Player player, EntityPlayer nmsPlayer, IBlockData iblockdata, BlockPosition blockPos, Position pos, boolean dropItems,
+			boolean instantlyBroken) {
+		AsyncBlockBreakEvent event = new AsyncBlockBreakEvent(pos, player, BukkitLoader.getNmsProvider().toMaterial(iblockdata), instantlyBroken, BlockFace.valueOf(packet.c().name()));
+		event.setTileDrops(!Loader.DISABLE_TILE_DROPS);
+		event.setDropItems(dropItems);
+		if (instantlyBroken) {
+			PlayerInteractEvent interactEvent = new PlayerInteractEvent(player, Action.LEFT_CLICK_BLOCK, player.getItemInHand(), pos.getBlock(), event.getBlockFace());
+			if (PlayerInteractEvent.getHandlerList().getRegisteredListeners().length > 0) {
+				if (Loader.SYNC_EVENT) {
+					BukkitLoader.getNmsProvider().postToMainThread(() -> {
+						Bukkit.getPluginManager().callEvent(interactEvent);
+						if (interactEvent.isCancelled() || interactEvent.useInteractedBlock() == Result.DENY) {
+							sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
+							return;
+						}
+						// Drop exp only in survival / adventure gamemode
+						if (player.getGameMode() == GameMode.ADVENTURE || player.getGameMode() == GameMode.SURVIVAL)
+							if (nmsPlayer.d(iblockdata.b().m()))
+								event.setExpToDrop(iblockdata.b().getExpDrop(iblockdata, nmsPlayer.x(), blockPos, CraftItemStack.asNMSCopy(player.getItemInHand()), true));
+
+						// Do not call event if isn't registered any listener - instantly process async
+						if (BlockExpEvent.getHandlerList().getRegisteredListeners().length == 0) {
+							Ref.set(event, async, true);
+							breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
+							return;
+						}
+						Bukkit.getPluginManager().callEvent(event);
+						if (event.isCancelled()) {
+							sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
+							return;
+						}
+						breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
+					});
+					return;
+				}
+				Ref.set(interactEvent, async, true);
+				Bukkit.getPluginManager().callEvent(interactEvent);
+				if (event.isCancelled()) {
+					sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
+					return;
+				}
+			}
+		}
+
+		// Drop exp only in survival / adventure gamemode
+		if (player.getGameMode() == GameMode.ADVENTURE || player.getGameMode() == GameMode.SURVIVAL)
+			if (nmsPlayer.d(iblockdata.b().m()))
+				event.setExpToDrop(iblockdata.b().getExpDrop(iblockdata, nmsPlayer.x(), blockPos, CraftItemStack.asNMSCopy(player.getItemInHand()), true));
+
+		// Do not call event if isn't registered any listener - instantly process async
+		if (BlockExpEvent.getHandlerList().getRegisteredListeners().length == 0) {
+			Ref.set(event, async, true);
+			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
+			return;
+		}
+
+		if (Loader.SYNC_EVENT)
+			BukkitLoader.getNmsProvider().postToMainThread(() -> {
+				Bukkit.getPluginManager().callEvent(event);
+				if (event.isCancelled()) {
+					sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
+					return;
+				}
+				breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
+			});
+		else {
+			Ref.set(event, async, true);
+			Bukkit.getPluginManager().callEvent(event);
+			if (event.isCancelled()) {
+				sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
+				return;
+			}
+			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
+		}
+	}
+
+	/**
+	 * @apiNote Process block break in the world and send packets (after
+	 *          AsyncBlockBreakEvent, see
+	 *          {@link v1_19_R1#processBlockBreak(PacketPlayInBlockDig, Player, EntityPlayer, IBlockData, BlockPosition, Position, boolean, boolean)}
+	 */
+	public void breakBlock(Player player, Position pos, IBlockData iblockdata, EntityPlayer nmsPlayer, PacketPlayInBlockDig packet, AsyncBlockBreakEvent breakEvent) {
+		LootTable loot = breakEvent.getLoot();
+		// Add loot from block to the LootTable
+		if (breakEvent.isDropItems())
+			for (ItemStack item : pos.getBlock().getDrops(player.getItemInHand(), player))
+				loot.add(item);
+
+		// Destroy block/s
+		Material material = iblockdata.getBukkitMaterial();
+		if (material == Material.CHEST || material == Material.TRAPPED_CHEST) {
+			destroyChest(player, pos, iblockdata, loot, breakEvent.doTileDrops());
+			pos.updatePhysics(Blocks.a.m());
+		}
+		if (breakEvent.doTileDrops() && iblockdata.b() instanceof BlockTileEntity) {
+			Object prev = pos.getIBlockData();
+			TileEntity blockEntity = ((Chunk) pos.getNMSChunk()).c_((BlockPosition) pos.getBlockPosition());
+			TileEntityContainer inv = blockEntity instanceof TileEntityContainer ? (TileEntityContainer) blockEntity : null;
+			if (inv != null && !(inv instanceof TileEntityShulkerBox))
+				for (net.minecraft.world.item.ItemStack item : inv.getContents())
+					loot.add(CraftItemStack.asBukkitCopy(item));
+			pos.setAirAndUpdate(false);
+			destroyAround(material, packet.c(), pos, player, loot, breakEvent.isDropItems());
+			pos.updatePhysics(prev);
+		} else if (isDoubleBlock(material)) { // plant or door
+			destroyDoubleBlock(isWaterlogged(iblockdata), player, pos, iblockdata, loot, breakEvent.isDropItems());
+			pos.updatePhysics(Blocks.a.m());
+		} else if (isBed(material)) {
+			destroyBed(player, pos, iblockdata, loot, breakEvent.isDropItems());
+			pos.updatePhysics(Blocks.a.m());
+		} else {
+			Object prev = pos.getIBlockData();
+			// Set block to air/water & update nearby blocks
+			removeBlock(pos, isWaterlogged(iblockdata));
+			if (material == Material.NETHER_PORTAL)
+				removeAllSurroundingPortals(pos);
+			else if (Loader.LADDER_WORKS_AS_VINE && material == Material.LADDER) {
+				Position clone = pos.clone();
+				clone.setY(clone.getY() - 1);
+				IBlockData blockData = (IBlockData) clone.getIBlockData();
+				Material type = blockData.getBukkitMaterial();
+				if (type == Material.LADDER)
+					destroyLadder(clone, loot, breakEvent.isDropItems(), blockData);
+			} else if (material == Material.VINE || material == Material.CAVE_VINES || material == Material.GLOW_LICHEN) {
+				Position clone = pos.clone();
+				clone.setY(clone.getY() - 1);
+				IBlockData blockData = (IBlockData) clone.getIBlockData();
+				Material type = blockData.getBukkitMaterial();
+				if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN)
+					destroyVine(clone, blockData);
+			} else if (material == Material.WEEPING_VINES || material == Material.WEEPING_VINES_PLANT) {
+				fixPlantIfType(pos, material);
+				Position clone = pos.clone();
+				clone.setY(clone.getY() - 1);
+				Material type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
+				while (type == Material.WEEPING_VINES || type == Material.WEEPING_VINES_PLANT) {
+					if (breakEvent.isDropItems())
+						for (ItemStack item : clone.getBlock().getDrops())
+							loot.add(item);
+					clone.setAirAndUpdate(false);
+					clone.setY(clone.getY() - 1);
+					type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
+				}
+			} else if (material == Material.CHORUS_FLOWER || material == Material.POPPED_CHORUS_FRUIT) {
+				Position clone = pos.clone();
+				onDestroyFlower(clone);
+			} else if (material == Material.CHORUS_PLANT)
+				destroyChorusInit(pos, iblockdata, loot, breakEvent.isDropItems(), false);
+			else if (isGrowingUp(material)) {
+				Position clone = pos.clone();
+				clone.setY(clone.getY() + 1);
+				Material type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
+				while (isGrowingUp(type)) {
+					if (breakEvent.isDropItems())
+						for (ItemStack item : clone.getBlock().getDrops())
+							loot.add(item);
+					removeBlock(clone, type == Material.KELP || type == Material.KELP_PLANT);
+					clone.setY(clone.getY() + 1);
+					type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
+				}
+				fixPlantIfType(pos, material);
+			} else if (material.isSolid() && !material.isAir() && !material.name().contains("WALL_"))
+				destroyAround(material, packet.c(), pos, player, loot, breakEvent.isDropItems());
+			pos.updatePhysics(prev);
+		}
+		// Damage tool
+		net.minecraft.world.item.ItemStack itemInHand = nmsPlayer.b(EnumHand.a);
+		short maxDamage = CraftMagicNumbers.getMaterial(itemInHand.c()).getMaxDurability();
+		if (maxDamage > 0) { // Is tool/armor
+			int damage = damageTool(nmsPlayer, itemInHand, itemInHand.u != null && itemInHand.u.q("Unbreakable") ? 0 : 1);
+			if (damage > 0)
+				if (itemInHand.j() + damage >= CraftMagicNumbers.getMaterial(itemInHand.c()).getMaxDurability())
+					nmsPlayer.a(EnumHand.a, net.minecraft.world.item.ItemStack.b);
+				else
+					itemInHand.b(itemInHand.j() + damage);
+		}
+		// Packet response
+		BukkitLoader.getPacketHandler().send(player, new ClientboundBlockChangedAckPacket(packet.e()));
+
+		// Drop items & exp
+		Location dropLoc = pos.add(0.5, 0, 0.5).toLocation();
+		if (!loot.getItems().isEmpty() && breakEvent.isDropItems() || breakEvent.getExpToDrop() > 0)
+			if (Bukkit.isPrimaryThread()) {
+
+				// Do not call event if isn't registered any listener
+				if (BlockBreakDropItemsEvent.getHandlerList().getRegisteredListeners().length == 0) {
+					if (!loot.getItems().isEmpty() && breakEvent.isDropItems())
+						for (ItemStack drop : loot.getItems())
+							player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
+					if (breakEvent.getExpToDrop() > 0)
+						player.getWorld().spawn(dropLoc, EntityType.EXPERIENCE_ORB.getEntityClass(), c -> {
+							ExperienceOrb orb = (ExperienceOrb) c;
+							orb.setExperience(breakEvent.getExpToDrop());
+						});
+					return;
+				}
+				if (!loot.getItems().isEmpty() && breakEvent.isDropItems()) {
+					BlockBreakDropItemsEvent event = new BlockBreakDropItemsEvent(breakEvent, loot);
+					Bukkit.getPluginManager().callEvent(event);
+					if (!event.isCancelled())
+						for (ItemStack drop : event.getLoot().getItems())
+							player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
+				}
+				if (breakEvent.getExpToDrop() > 0)
+					player.getWorld().spawn(dropLoc, EntityType.EXPERIENCE_ORB.getEntityClass(), c -> {
+						ExperienceOrb orb = (ExperienceOrb) c;
+						orb.setExperience(breakEvent.getExpToDrop());
+					});
+			} else
+				MinecraftServer.getServer().execute(() -> {
+
+					// Do not call event if isn't registered any listener
+					if (BlockBreakDropItemsEvent.getHandlerList().getRegisteredListeners().length == 0) {
+						if (!loot.getItems().isEmpty() && breakEvent.isDropItems())
+							for (ItemStack drop : loot.getItems())
+								player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
+						if (breakEvent.getExpToDrop() > 0)
+							player.getWorld().spawn(dropLoc, EntityType.EXPERIENCE_ORB.getEntityClass(), c -> {
+								ExperienceOrb orb = (ExperienceOrb) c;
+								orb.setExperience(breakEvent.getExpToDrop());
+							});
+						return;
+					}
+					if (!loot.getItems().isEmpty() && breakEvent.isDropItems()) {
+						BlockBreakDropItemsEvent event = new BlockBreakDropItemsEvent(breakEvent, loot);
+						Bukkit.getPluginManager().callEvent(event);
+						if (!event.isCancelled())
+							for (ItemStack drop : event.getLoot().getItems())
+								player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
+					}
+					if (breakEvent.getExpToDrop() > 0)
+						player.getWorld().spawn(dropLoc, EntityType.EXPERIENCE_ORB.getEntityClass(), c -> {
+							ExperienceOrb orb = (ExperienceOrb) c;
+							orb.setExperience(breakEvent.getExpToDrop());
+						});
+				});
+	}
+
+	/**
+	 * @apiNote Call PlayerItemDamageEvent and damage item
+	 */
+	private int damageTool(EntityPlayer player, net.minecraft.world.item.ItemStack item, int damage) {
+		int enchant = EnchantmentManager.a(Enchantments.w, item);
+
+		if (enchant > 0 && EnchantmentDurability.a(item, enchant, player.dQ()))
+			--damage;
+
+		PlayerItemDamageEvent event = new PlayerItemDamageEvent(player.getBukkitEntity(), CraftItemStack.asCraftMirror(item), damage);
+		if (!Bukkit.isPrimaryThread())
+			Ref.set(event, async, true);
+		Bukkit.getPluginManager().callEvent(event);
+
+		if (event.isCancelled())
+			return 0;
+
+		return event.getDamage();
+	}
+
+	/**
+	 * @apiNote Send to the player block break cancel packets
+	 */
+	private void sendCancelPackets(PacketPlayInBlockDig packet, Player player, BlockPosition blockPos, IBlockData iblockdata) {
+		BukkitLoader.getPacketHandler().send(player, new PacketPlayOutBlockChange(blockPos, iblockdata));
+		BukkitLoader.getPacketHandler().send(player, new ClientboundBlockChangedAckPacket(packet.e()));
+	}
+
+	/**
+	 * @apiNote Is BlockData water logged?
+	 */
+	private boolean isWaterlogged(IBlockData data) {
+		if (data.getBukkitMaterial() == Material.SEAGRASS || data.getBukkitMaterial() == Material.TALL_SEAGRASS || data.getBukkitMaterial() == Material.KELP
+				|| data.getBukkitMaterial() == Material.KELP_PLANT)
+			return true;
+		return !data.b(waterlogged) ? false : data.c(waterlogged);
+	}
+
+	/**
+	 * @apiNote Destroy chest, drop loot and update connected chest (if is double
+	 *          chest)
+	 */
+	private void destroyChest(Player player, Position pos, IBlockData iblockdata, LootTable items, boolean dropItems) {
+		BlockPropertyChestType chesttype = iblockdata.c(chestType);
+		BlockFace face = BlockFace.valueOf(iblockdata.c(direction).name());
+		if (dropItems && iblockdata.o()) {
+			TileEntity tile = ((Chunk) pos.getNMSChunk()).c_((BlockPosition) pos.getBlockPosition());
+			if (tile != null && tile instanceof TileEntityChest chest)
+				for (net.minecraft.world.item.ItemStack nmsItem : chest.getContents())
+					items.add(CraftItemStack.asBukkitCopy(nmsItem));
+		}
+
+		if (chesttype == BlockPropertyChestType.c) {
+			Position clone = pos.clone();
+			switch (face) {
+			case EAST:
+				clone.add(0, 0, -1);
+				break;
+			case NORTH:
+				clone.add(-1, 0, 0);
+				break;
+			case SOUTH:
+				clone.add(1, 0, 0);
+				break;
+			case WEST:
+				clone.add(0, 0, 1);
+				break;
+			default:
+				break;
+			}
+			IBlockData data = (IBlockData) clone.getIBlockData();
+			if (!data.o()) {
+				removeBlock(pos, isWaterlogged(iblockdata));
+				return;
+			}
+			BlockPosition blockPos = (BlockPosition) clone.getBlockPosition();
+			TileEntity tile = ((Chunk) clone.getNMSChunk()).c_(blockPos);
+			if (tile == null) {
+				removeBlock(pos, isWaterlogged(iblockdata));
+				return;
+			}
+			NBTTagCompound tag = tile.o();
+			removeBlock(pos, isWaterlogged(iblockdata));
+			if (data.getBukkitMaterial() == Material.CHEST || data.getBukkitMaterial() == Material.TRAPPED_CHEST) {
+				data = data.a(chestType, BlockPropertyChestType.a);
+				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), data);
+				tile = ((Chunk) clone.getNMSChunk()).c_(blockPos);
+				if (tile != null)
+					tile.a(tag);
+				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, data));
+			}
+		} else if (chesttype == BlockPropertyChestType.b) {
+			Position clone = pos.clone();
+			switch (face) {
+			case EAST:
+				clone.add(0, 0, 1);
+				break;
+			case NORTH:
+				clone.add(1, 0, 0);
+				break;
+			case SOUTH:
+				clone.add(-1, 0, 0);
+				break;
+			case WEST:
+				clone.add(0, 0, -1);
+				break;
+			default:
+				break;
+			}
+			IBlockData data = (IBlockData) clone.getIBlockData();
+			if (!data.o()) {
+				removeBlock(pos, isWaterlogged(iblockdata));
+				return;
+			}
+			BlockPosition blockPos = (BlockPosition) clone.getBlockPosition();
+			TileEntity tile = ((Chunk) clone.getNMSChunk()).c_(blockPos);
+			if (tile == null) {
+				removeBlock(pos, isWaterlogged(iblockdata));
+				return;
+			}
+			NBTTagCompound tag = tile.o();
+			removeBlock(pos, isWaterlogged(iblockdata));
+			if (data.getBukkitMaterial() == Material.CHEST || data.getBukkitMaterial() == Material.TRAPPED_CHEST) {
+				data = data.a(chestType, BlockPropertyChestType.a);
+				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), data);
+				tile = ((Chunk) clone.getNMSChunk()).c_(blockPos);
+				if (tile != null)
+					tile.a(tag);
+				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, data));
+			}
+		} else
+			removeBlock(pos, isWaterlogged(iblockdata));
+	}
+
+	/**
+	 * @apiNote Destroy double blocks (plants, doors)
+	 */
+	private void destroyDoubleBlock(boolean water, Player player, Position pos, IBlockData iblockdata, LootTable items, boolean dropItems) {
+		removeBlock(pos, water);
+		if (iblockdata.c(doubleHalf) == BlockPropertyDoubleBlockHalf.b) {
+			Position clone = pos.clone().add(0, 1, 0);
+			removeBlock(clone, water);
+		} else {
+			Position clone = pos.clone().add(0, -1, 0);
+			if (dropItems)
+				for (ItemStack item : clone.getBlock().getDrops())
+					items.add(item);
+			removeBlock(clone, water);
+		}
+	}
+
+	/**
+	 * @apiNote Is current type of plant growing up?
+	 */
+	private boolean isGrowingUp(Material type) {
+		return type == Material.TWISTING_VINES || type == Material.TWISTING_VINES_PLANT || type == Material.SUGAR_CANE || type == Material.BAMBOO || type == Material.KELP
+				|| type == Material.KELP_PLANT;
+	}
+
+	/**
+	 * @apiNote Kill connected entities to the block
+	 */
+	private void removeEntitiesFrom(Position pos, WorldServer world, Position clone, LootTable items, boolean painting) {
+		Chunk chunk = (Chunk) clone.getNMSChunk();
+		if (IS_PAPER)
+			for (org.bukkit.entity.Entity entity : chunk.getChunkHolder().getEntityChunk().getChunkEntities())
+				removeEntity(pos, items, entity, painting);
+		else {
+			@SuppressWarnings("unchecked")
+			PersistentEntitySectionManager<Entity> entityManager = (PersistentEntitySectionManager<Entity>) Ref.get(world, persistentEntitySectionManager);
+			for (org.bukkit.entity.Entity entity : entityManager.getEntities(new ChunkCoordIntPair(clone.getBlockX() >> 4, clone.getBlockZ() >> 4)).stream().map(Entity::getBukkitEntity)
+					.filter(Objects::nonNull).toArray(paramInt -> new org.bukkit.entity.Entity[paramInt]))
+				removeEntity(pos, items, entity, painting);
+		}
+	}
+
+	/**
+	 * @apiNote Kill entities, see
+	 *          {@link #removeEntitiesFrom(Position, WorldServer, Position, LootTable, boolean)}
+	 */
 	private void removeEntity(Position pos, LootTable items, org.bukkit.entity.Entity entity, boolean canBePainting) {
 		if (entity instanceof ItemFrame frame) {
 			Location loc = entity.getLocation().add(frame.getAttachedFace().getDirection());
@@ -118,82 +587,9 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		}
 	}
 
-	private void destroyChorusInit(Position start, IBlockData blockData, LootTable items, boolean dropItems, boolean destroy) {
-		if (destroy) {
-			if (dropItems)
-				for (ItemStack item : start.getBlock().getDrops())
-					items.add(item);
-			removeBlock(start, false);
-		}
-		boolean onEast = blockData.c(east);
-		boolean onNorth = blockData.c(north);
-		boolean onSouth = blockData.c(south);
-		boolean onWest = blockData.c(west);
-		boolean onTop = blockData.c(up);
-		if (onTop) {
-			destroyChorus(start.clone().add(0, 1, 0), items, dropItems, 1);
-			return;
-		}
-		if (onEast)
-			destroyChorus(start.clone().add(BlockFace.EAST.getModX(), 0, BlockFace.EAST.getModZ()), items, dropItems, 0);
-		if (onNorth)
-			destroyChorus(start.clone().add(BlockFace.NORTH.getModX(), 0, BlockFace.NORTH.getModZ()), items, dropItems, 0);
-		if (onSouth)
-			destroyChorus(start.clone().add(BlockFace.SOUTH.getModX(), 0, BlockFace.SOUTH.getModZ()), items, dropItems, 0);
-		if (onWest)
-			destroyChorus(start.clone().add(BlockFace.WEST.getModX(), 0, BlockFace.WEST.getModZ()), items, dropItems, 0);
-	}
-
-	private void destroyChorus(Position start, LootTable items, boolean dropItems, int direction) {
-		IBlockData blockData = (IBlockData) start.getIBlockData();
-		if (blockData.getBukkitMaterial() == Material.CHORUS_FLOWER || blockData.getBukkitMaterial() == Material.POPPED_CHORUS_FRUIT) {
-			if (dropItems)
-				for (ItemStack item : start.getBlock().getDrops())
-					items.add(item);
-			removeBlock(start, false);
-			return;
-		}
-		if (!(blockData.b() instanceof BlockChorusFruit))
-			return;
-		if (dropItems)
-			for (ItemStack item : start.getBlock().getDrops())
-				items.add(item);
-		removeBlock(start, false);
-		boolean onEast = blockData.c(east);
-		boolean onNorth = blockData.c(north);
-		boolean onSouth = blockData.c(south);
-		boolean onWest = blockData.c(west);
-		boolean onTop = blockData.c(up);
-		if (onTop) {
-			destroyChorus(start.clone().add(0, 1, 0), items, dropItems, 1);
-			return;
-		}
-		if (direction == 0)
-			return; // 2x to the side?
-		if (onEast)
-			destroyChorus(start.clone().add(BlockFace.EAST.getModX(), 0, BlockFace.EAST.getModZ()), items, dropItems, 0);
-		if (onNorth)
-			destroyChorus(start.clone().add(BlockFace.NORTH.getModX(), 0, BlockFace.NORTH.getModZ()), items, dropItems, 0);
-		if (onSouth)
-			destroyChorus(start.clone().add(BlockFace.SOUTH.getModX(), 0, BlockFace.SOUTH.getModZ()), items, dropItems, 0);
-		if (onWest)
-			destroyChorus(start.clone().add(BlockFace.WEST.getModX(), 0, BlockFace.WEST.getModZ()), items, dropItems, 0);
-	}
-
-	private void removeEntitiesFrom(Position pos, WorldServer world, Position clone, LootTable items, boolean painting) {
-		Chunk chunk = (Chunk) clone.getNMSChunk();
-		if (IS_PAPER)
-			for (org.bukkit.entity.Entity entity : chunk.getChunkHolder().getEntityChunk().getChunkEntities())
-				removeEntity(pos, items, entity, painting);
-		else {
-			@SuppressWarnings("unchecked")
-			PersistentEntitySectionManager<Entity> entityManager = (PersistentEntitySectionManager<Entity>) Ref.get(world, "P");
-			for (org.bukkit.entity.Entity entity : entityManager.getEntities(new ChunkCoordIntPair(clone.getBlockX() >> 4, clone.getBlockZ() >> 4)).stream().map(Entity::getBukkitEntity)
-					.filter(Objects::nonNull).toArray(paramInt -> new org.bukkit.entity.Entity[paramInt]))
-				removeEntity(pos, items, entity, painting);
-		}
-	}
-
+	/**
+	 * @apiNote Tick blocks around
+	 */
 	private void destroyAround(Material blockType, EnumDirection dir, Position pos, Player player, LootTable items, boolean dropItems) {
 		BlockPosition cposBlock = (BlockPosition) pos.getBlockPosition();
 
@@ -229,11 +625,9 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				destroyChorusInit(clone, blockData, items, dropItems, true);
 			else if (isBed(type))
 				destroyBed(player, clone, blockData, items, dropItems);
-			else if (type == Material.TWISTING_VINES || type == Material.TWISTING_VINES_PLANT || type == Material.SUGAR_CANE || type == Material.BAMBOO || type == Material.KELP
-					|| type == Material.KELP_PLANT) {
+			else if (isGrowingUp(type)) {
 				type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
-				while (type == Material.TWISTING_VINES || type == Material.TWISTING_VINES_PLANT || type == Material.SUGAR_CANE || type == Material.BAMBOO || type == Material.KELP
-						|| type == Material.KELP_PLANT) {
+				while (isGrowingUp(type)) {
 					if (dropItems)
 						for (ItemStack item : clone.getBlock().getDrops())
 							items.add(item);
@@ -398,6 +792,9 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		}
 	}
 
+	/**
+	 * @apiNote Apply physics on dripstone
+	 */
 	private void fallDripstone(WorldServer world, BlockPosition bPos, IBlockData data) {
 		if (!Bukkit.isPrimaryThread()) {
 			BukkitLoader.getNmsProvider().postToMainThread(() -> {
@@ -411,74 +808,24 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		dripstone.b(f, 40);
 	}
 
+	/**
+	 * @apiNote Is this material type of destroyable ameethyst which need block
+	 *          under?
+	 */
 	private boolean isAmethyst(Material type) {
 		return type == Material.AMETHYST_CLUSTER || type == Material.LARGE_AMETHYST_BUD || type == Material.MEDIUM_AMETHYST_BUD || type == Material.SMALL_AMETHYST_BUD;
 	}
 
+	/**
+	 * @apiNote Should skip this material? (check type, physics, etc)
+	 */
 	public boolean shouldSkip(Material type) {
 		return type == Material.WATER || type == Material.LAVA || type.isAir();
 	}
 
-	private void removeAllSurroundingPortals(Position pos) {
-		for (BlockFace face : all_faces) {
-			Position clone = pos.clone().add(face.getModX(), face.getModY(), face.getModZ());
-			IBlockData blockData = (IBlockData) clone.getIBlockData();
-			Material type = blockData.getBukkitMaterial();
-			if (type == Material.NETHER_PORTAL) {
-				clone.setAirAndUpdate(false);
-				removeAllSurroundingPortals(clone);
-			}
-		}
-	}
-
-	private boolean blockBehindOrAbove(Position pos, IBlockData blockData) {
-		boolean onEast = blockData.c(east);
-		boolean onNorth = blockData.c(north);
-		boolean onSouth = blockData.c(south);
-		boolean onWest = blockData.c(west);
-		boolean onTop = blockData.c(up);
-		if (isVine(pos.clone().add(0, 1, 0), blockData.getBukkitMaterial()) || onTop && isSolid(pos.clone().add(0, 1, 0))
-				|| onEast && isSolid(pos.clone().add(BlockFace.EAST.getModX(), 0, BlockFace.EAST.getModZ()))
-				|| onNorth && isSolid(pos.clone().add(BlockFace.NORTH.getModX(), 0, BlockFace.NORTH.getModZ()))
-				|| onSouth && isSolid(pos.clone().add(BlockFace.SOUTH.getModX(), 0, BlockFace.SOUTH.getModZ()))
-				|| onWest && isSolid(pos.clone().add(BlockFace.WEST.getModX(), 0, BlockFace.WEST.getModZ())))
-			return true;
-		return false;
-	}
-
-	private boolean blockBehindOrAboveLadder(Position pos, IBlockData blockData) {
-		if (pos.clone().add(0, 1, 0).getBukkitType() == Material.LADDER || isSolid(
-				pos.clone().add(BlockFace.valueOf(blockData.c(direction).name()).getOppositeFace().getModX(), 0, BlockFace.valueOf(blockData.c(direction).name()).getOppositeFace().getModZ())))
-			return true;
-		return false;
-	}
-
-	private void destroyVine(Position pos, IBlockData blockData) {
-		if (blockBehindOrAbove(pos, blockData))
-			return;
-
-		removeBlock(pos, isWaterlogged(blockData));
-		pos = pos.clone().setY(pos.getY() - 1);
-		blockData = (IBlockData) pos.getIBlockData();
-		Material type = blockData.getBukkitMaterial();
-		if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN)
-			destroyVine(pos, blockData);
-	}
-
-	private void destroyLadder(Position pos, LootTable loot, boolean dropItems, IBlockData blockData) {
-		if (blockBehindOrAboveLadder(pos, blockData))
-			return;
-
-		removeBlock(pos, isWaterlogged(blockData));
-		pos = pos.clone().setY(pos.getY() - 1);
-		blockData = (IBlockData) pos.getIBlockData();
-		Material type = blockData.getBukkitMaterial();
-		if (dropItems)
-			loot.add(new ItemStack(Material.LADDER));
-		if (type == Material.LADDER)
-			destroyLadder(pos, loot, dropItems, blockData);
-	}
-
+	/**
+	 * @apiNote Destroy bed blocks
+	 */
 	private static void destroyBed(Player player, Position clone, IBlockData blockData, LootTable items, boolean dropItems) {
 		clone.setAirAndUpdate(false);
 		BlockFace face = BlockFace.valueOf(blockData.c(direction).name());
@@ -493,478 +840,209 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		clone.setAirAndUpdate(false);
 	}
 
-	private void destroyChest(Player player, Position pos, IBlockData iblockdata, LootTable items, boolean dropItems) {
-		BlockPropertyChestType chesttype = iblockdata.c(chestType);
-		BlockFace face = BlockFace.valueOf(iblockdata.c(direction).name());
-		if (dropItems && iblockdata.o()) {
-			TileEntity tile = ((Chunk) pos.getNMSChunk()).c_((BlockPosition) pos.getBlockPosition());
-			if (tile != null && tile instanceof TileEntityChest chest)
-				for (net.minecraft.world.item.ItemStack nmsItem : chest.getContents())
-					items.add(CraftItemStack.asBukkitCopy(nmsItem));
+	/**
+	 * @apiNote Remove all surrounding nether portals
+	 */
+	private void removeAllSurroundingPortals(Position pos) {
+		for (BlockFace face : all_faces) {
+			Position clone = pos.clone().add(face.getModX(), face.getModY(), face.getModZ());
+			IBlockData blockData = (IBlockData) clone.getIBlockData();
+			Material type = blockData.getBukkitMaterial();
+			if (type == Material.NETHER_PORTAL) {
+				clone.setAirAndUpdate(false);
+				removeAllSurroundingPortals(clone);
+			}
 		}
-
-		if (chesttype == BlockPropertyChestType.c) {
-			Position clone = pos.clone();
-			switch (face) {
-			case EAST:
-				clone.add(0, 0, -1);
-				break;
-			case NORTH:
-				clone.add(-1, 0, 0);
-				break;
-			case SOUTH:
-				clone.add(1, 0, 0);
-				break;
-			case WEST:
-				clone.add(0, 0, 1);
-				break;
-			default:
-				break;
-			}
-			IBlockData data = (IBlockData) clone.getIBlockData();
-			if (!data.o()) {
-				removeBlock(pos, isWaterlogged(iblockdata));
-				return;
-			}
-			BlockPosition blockPos = (BlockPosition) clone.getBlockPosition();
-			TileEntity tile = ((Chunk) clone.getNMSChunk()).c_(blockPos);
-			if (tile == null) {
-				removeBlock(pos, isWaterlogged(iblockdata));
-				return;
-			}
-			NBTTagCompound tag = tile.o();
-			removeBlock(pos, isWaterlogged(iblockdata));
-			if (data.getBukkitMaterial() == Material.CHEST || data.getBukkitMaterial() == Material.TRAPPED_CHEST) {
-				data = data.a(chestType, BlockPropertyChestType.a);
-				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), data);
-				tile = ((Chunk) clone.getNMSChunk()).c_(blockPos);
-				if (tile != null)
-					tile.a(tag);
-				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, data));
-			}
-		} else if (chesttype == BlockPropertyChestType.b) {
-			Position clone = pos.clone();
-			switch (face) {
-			case EAST:
-				clone.add(0, 0, 1);
-				break;
-			case NORTH:
-				clone.add(1, 0, 0);
-				break;
-			case SOUTH:
-				clone.add(-1, 0, 0);
-				break;
-			case WEST:
-				clone.add(0, 0, -1);
-				break;
-			default:
-				break;
-			}
-			IBlockData data = (IBlockData) clone.getIBlockData();
-			if (!data.o()) {
-				removeBlock(pos, isWaterlogged(iblockdata));
-				return;
-			}
-			BlockPosition blockPos = (BlockPosition) clone.getBlockPosition();
-			TileEntity tile = ((Chunk) clone.getNMSChunk()).c_(blockPos);
-			if (tile == null) {
-				removeBlock(pos, isWaterlogged(iblockdata));
-				return;
-			}
-			NBTTagCompound tag = tile.o();
-			removeBlock(pos, isWaterlogged(iblockdata));
-			if (data.getBukkitMaterial() == Material.CHEST || data.getBukkitMaterial() == Material.TRAPPED_CHEST) {
-				data = data.a(chestType, BlockPropertyChestType.a);
-				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), data);
-				tile = ((Chunk) clone.getNMSChunk()).c_(blockPos);
-				if (tile != null)
-					tile.a(tag);
-				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, data));
-			}
-		} else
-			removeBlock(pos, isWaterlogged(iblockdata));
 	}
 
-	private void destroyDoubleBlock(boolean water, Player player, Position pos, IBlockData iblockdata, LootTable items, boolean dropItems) {
-		removeBlock(pos, water);
-		if (iblockdata.c(doubleHalf) == BlockPropertyDoubleBlockHalf.b) {
-			Position clone = pos.clone().add(0, 1, 0);
-			removeBlock(clone, water);
-		} else {
-			Position clone = pos.clone().add(0, -1, 0);
+	/**
+	 * @apiNote Destroy vines
+	 */
+	private void destroyVine(Position pos, IBlockData blockData) {
+		if (blockBehindOrAbove(pos, blockData))
+			return;
+
+		removeBlock(pos, isWaterlogged(blockData));
+		pos = pos.clone().setY(pos.getY() - 1);
+		blockData = (IBlockData) pos.getIBlockData();
+		Material type = blockData.getBukkitMaterial();
+		if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN)
+			destroyVine(pos, blockData);
+	}
+
+	/**
+	 * @apiNote Check if is block behind or block above is vine & is connected to
+	 *          this one
+	 */
+	private boolean blockBehindOrAbove(Position pos, IBlockData blockData) {
+		boolean onEast = blockData.c(east);
+		boolean onNorth = blockData.c(north);
+		boolean onSouth = blockData.c(south);
+		boolean onWest = blockData.c(west);
+		boolean onTop = blockData.c(up);
+		return isVine(pos.clone().add(0, 1, 0), blockData.getBukkitMaterial()) || onTop && isSolid(pos.clone().add(0, 1, 0))
+				|| onEast && isSolid(pos.clone().add(BlockFace.EAST.getModX(), 0, BlockFace.EAST.getModZ()))
+				|| onNorth && isSolid(pos.clone().add(BlockFace.NORTH.getModX(), 0, BlockFace.NORTH.getModZ()))
+				|| onSouth && isSolid(pos.clone().add(BlockFace.SOUTH.getModX(), 0, BlockFace.SOUTH.getModZ()))
+				|| onWest && isSolid(pos.clone().add(BlockFace.WEST.getModX(), 0, BlockFace.WEST.getModZ()));
+	}
+
+	/**
+	 * @apiNote Destroy ladders, see {@value Loader#LADDER_WORKS_AS_VINE}
+	 */
+	private void destroyLadder(Position pos, LootTable loot, boolean dropItems, IBlockData blockData) {
+		if (blockBehindOrAboveLadder(pos, blockData))
+			return;
+
+		removeBlock(pos, isWaterlogged(blockData));
+		pos = pos.clone().setY(pos.getY() - 1);
+		blockData = (IBlockData) pos.getIBlockData();
+		Material type = blockData.getBukkitMaterial();
+		if (dropItems)
+			loot.add(new ItemStack(Material.LADDER));
+		if (type == Material.LADDER)
+			destroyLadder(pos, loot, dropItems, blockData);
+	}
+
+	/**
+	 * @apiNote Check if is block behind or block above is ladder
+	 */
+	private boolean blockBehindOrAboveLadder(Position pos, IBlockData blockData) {
+		return pos.clone().add(0, 1, 0).getBukkitType() == Material.LADDER || isSolid(
+				pos.clone().add(BlockFace.valueOf(blockData.c(direction).name()).getOppositeFace().getModX(), 0, BlockFace.valueOf(blockData.c(direction).name()).getOppositeFace().getModZ()));
+	}
+
+	/**
+	 * @apiNote Start destroying of chorus plant with flowers, see
+	 *          {@link #destroyChorus(Position, LootTable, boolean, int)}
+	 */
+	private void destroyChorusInit(Position start, IBlockData blockData, LootTable items, boolean dropItems, boolean destroy) {
+		if (destroy) {
 			if (dropItems)
-				for (ItemStack item : clone.getBlock().getDrops())
+				for (ItemStack item : start.getBlock().getDrops())
 					items.add(item);
-			removeBlock(clone, water);
+			removeBlock(start, false);
 		}
-	}
-
-	public void breakBlock(Player player, Position pos, IBlockData iblockdata, EntityPlayer nmsPlayer, PacketPlayInBlockDig packet, AsyncBlockBreakEvent breakEvent) {
-		LootTable loot = breakEvent.getLoot();
-		// Add loot from block to the LootTable
-		if (breakEvent.isDropItems())
-			for (ItemStack item : pos.getBlock().getDrops(player.getItemInHand(), player))
-				loot.add(item);
-
-		// Destroy block/s
-		Material material = iblockdata.getBukkitMaterial();
-		if (material == Material.CHEST || material == Material.TRAPPED_CHEST) {
-			destroyChest(player, pos, iblockdata, loot, breakEvent.doTileDrops());
-			pos.updatePhysics(Blocks.a.m());
-		}
-		if (breakEvent.doTileDrops() && iblockdata.b() instanceof BlockTileEntity) {
-			Object prev = pos.getIBlockData();
-			TileEntity blockEntity = ((Chunk) pos.getNMSChunk()).c_((BlockPosition) pos.getBlockPosition());
-			TileEntityContainer inv = blockEntity instanceof TileEntityContainer ? (TileEntityContainer) blockEntity : null;
-			if (inv != null && !(inv instanceof TileEntityShulkerBox))
-				for (net.minecraft.world.item.ItemStack item : inv.getContents())
-					loot.add(CraftItemStack.asBukkitCopy(item));
-			pos.setAirAndUpdate(false);
-			destroyAround(material, packet.c(), pos, player, loot, breakEvent.isDropItems());
-			pos.updatePhysics(prev);
-		} else if (isDoubleBlock(material)) { // plant or door
-			destroyDoubleBlock(isWaterlogged(iblockdata), player, pos, iblockdata, loot, breakEvent.isDropItems());
-			pos.updatePhysics(Blocks.a.m());
-		} else if (isBed(material)) {
-			destroyBed(player, pos, iblockdata, loot, breakEvent.isDropItems());
-			pos.updatePhysics(Blocks.a.m());
-		} else {
-			Object prev = pos.getIBlockData();
-			// Set block to air/water & update nearby blocks
-			removeBlock(pos, isWaterlogged(iblockdata));
-			if (material == Material.NETHER_PORTAL)
-				removeAllSurroundingPortals(pos);
-			else if (Loader.LADDER_WORKS_AS_VINE && material == Material.LADDER) {
-				Position clone = pos.clone();
-				clone.setY(clone.getY() - 1);
-				IBlockData blockData = (IBlockData) clone.getIBlockData();
-				Material type = blockData.getBukkitMaterial();
-				if (type == Material.LADDER)
-					destroyLadder(clone, loot, breakEvent.isDropItems(), blockData);
-			} else if (material == Material.VINE || material == Material.CAVE_VINES || material == Material.GLOW_LICHEN) {
-				Position clone = pos.clone();
-				clone.setY(clone.getY() - 1);
-				IBlockData blockData = (IBlockData) clone.getIBlockData();
-				Material type = blockData.getBukkitMaterial();
-				if (type == Material.VINE || type == Material.CAVE_VINES || type == Material.GLOW_LICHEN)
-					destroyVine(clone, blockData);
-			} else if (material == Material.WEEPING_VINES || material == Material.WEEPING_VINES_PLANT) {
-				fixPlantIfType(pos, material);
-				Position clone = pos.clone();
-				clone.setY(clone.getY() - 1);
-				Material type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
-				while (type == Material.WEEPING_VINES || type == Material.WEEPING_VINES_PLANT) {
-					if (breakEvent.isDropItems())
-						for (ItemStack item : clone.getBlock().getDrops())
-							loot.add(item);
-					clone.setAirAndUpdate(false);
-					clone.setY(clone.getY() - 1);
-					type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
-				}
-			} else if (material == Material.CHORUS_FLOWER || material == Material.POPPED_CHORUS_FRUIT) {
-				Position clone = pos.clone();
-				// top?
-				clone.add(0, -1, 0);
-				iblockdata = (IBlockData) clone.getIBlockData();
-				if (iblockdata.b() instanceof BlockChorusFruit) {
-					boolean on = iblockdata.c(up);
-					if (on) {
-						iblockdata = iblockdata.a(up, false);
-						BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), iblockdata);
-						BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, iblockdata));
-						return;
-					}
-				}
-				// east?
-				clone.add(BlockFace.NORTH.getModX(), 0, BlockFace.NORTH.getModZ());
-				iblockdata = (IBlockData) clone.getIBlockData();
-				if (iblockdata.b() instanceof BlockChorusFruit) {
-					boolean on = iblockdata.c(east);
-					if (on) {
-						iblockdata = iblockdata.a(east, false);
-						BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), iblockdata);
-						BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, iblockdata));
-						return;
-					}
-				}
-				// north?
-				clone.add(BlockFace.EAST.getModX(), 0, BlockFace.EAST.getModZ());
-				iblockdata = (IBlockData) clone.getIBlockData();
-				if (iblockdata.b() instanceof BlockChorusFruit) {
-					boolean on = iblockdata.c(north);
-					if (on) {
-						iblockdata = iblockdata.a(north, false);
-						BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), iblockdata);
-						BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, iblockdata));
-						return;
-					}
-				}
-				// west?
-				clone.add(BlockFace.SOUTH.getModX(), 0, BlockFace.SOUTH.getModZ());
-				iblockdata = (IBlockData) clone.getIBlockData();
-				if (iblockdata.b() instanceof BlockChorusFruit) {
-					boolean on = iblockdata.c(west);
-					if (on) {
-						iblockdata = iblockdata.a(west, false);
-						BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), iblockdata);
-						BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, iblockdata));
-						return;
-					}
-				}
-				// south?
-				clone.add(BlockFace.WEST.getModX(), 0, BlockFace.WEST.getModZ());
-				iblockdata = (IBlockData) clone.getIBlockData();
-				if (iblockdata.b() instanceof BlockChorusFruit) {
-					boolean on = iblockdata.c(south);
-					if (on) {
-						iblockdata = iblockdata.a(south, false);
-						BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), iblockdata);
-						BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, iblockdata));
-						return;
-					}
-				}
-			} else if (material == Material.CHORUS_PLANT)
-				destroyChorusInit(pos, iblockdata, loot, breakEvent.isDropItems(), false);
-			else if (material == Material.TWISTING_VINES || material == Material.TWISTING_VINES_PLANT || material == Material.SUGAR_CANE || material == Material.BAMBOO || material == Material.KELP
-					|| material == Material.KELP_PLANT) {
-				Position clone = pos.clone();
-				clone.setY(clone.getY() + 1);
-				Material type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
-				while (type == Material.TWISTING_VINES || type == Material.TWISTING_VINES_PLANT || type == Material.SUGAR_CANE || type == Material.BAMBOO || type == Material.KELP
-						|| type == Material.KELP_PLANT) {
-					if (breakEvent.isDropItems())
-						for (ItemStack item : clone.getBlock().getDrops())
-							loot.add(item);
-					removeBlock(clone, type == Material.KELP || type == Material.KELP_PLANT);
-					clone.setY(clone.getY() + 1);
-					type = ((IBlockData) clone.getIBlockData()).getBukkitMaterial();
-				}
-				fixPlantIfType(pos, material);
-			} else if (material.isSolid() && !material.isAir() && !material.name().contains("WALL_"))
-				destroyAround(material, packet.c(), pos, player, loot, breakEvent.isDropItems());
-			pos.updatePhysics(prev);
-		}
-		// Damage tool
-		net.minecraft.world.item.ItemStack itemInHand = nmsPlayer.b(EnumHand.a);
-		short maxDamage = CraftMagicNumbers.getMaterial(itemInHand.c()).getMaxDurability();
-		if (maxDamage > 0) { // Is tool/armor
-			int damage = damageTool(nmsPlayer, itemInHand, itemInHand.u != null && itemInHand.u.q("Unbreakable") ? 0 : 1);
-			if (damage > 0)
-				if (itemInHand.j() + damage >= CraftMagicNumbers.getMaterial(itemInHand.c()).getMaxDurability())
-					nmsPlayer.a(EnumHand.a, net.minecraft.world.item.ItemStack.b);
-				else
-					itemInHand.b(itemInHand.j() + damage);
-		}
-		// Packet response
-		BukkitLoader.getPacketHandler().send(player, new ClientboundBlockChangedAckPacket(packet.e()));
-
-		// Drop items & exp
-		Location dropLoc = pos.add(0.5, 0, 0.5).toLocation();
-		if (!loot.getItems().isEmpty() && breakEvent.isDropItems() || breakEvent.getExpToDrop() > 0)
-			if (Bukkit.isPrimaryThread()) {
-
-				// Do not call event if isn't registered any listener
-				if (BlockBreakDropItemsEvent.getHandlerList().getRegisteredListeners().length == 0) {
-					if (!loot.getItems().isEmpty() && breakEvent.isDropItems())
-						for (ItemStack drop : loot.getItems())
-							player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
-					if (breakEvent.getExpToDrop() > 0)
-						player.getWorld().spawn(dropLoc, EntityType.EXPERIENCE_ORB.getEntityClass(), c -> {
-							ExperienceOrb orb = (ExperienceOrb) c;
-							orb.setExperience(breakEvent.getExpToDrop());
-						});
-					return;
-				}
-				if (!loot.getItems().isEmpty() && breakEvent.isDropItems()) {
-					BlockBreakDropItemsEvent event = new BlockBreakDropItemsEvent(breakEvent, loot);
-					Bukkit.getPluginManager().callEvent(event);
-					if (!event.isCancelled())
-						for (ItemStack drop : event.getLoot().getItems())
-							player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
-				}
-				if (breakEvent.getExpToDrop() > 0)
-					player.getWorld().spawn(dropLoc, EntityType.EXPERIENCE_ORB.getEntityClass(), c -> {
-						ExperienceOrb orb = (ExperienceOrb) c;
-						orb.setExperience(breakEvent.getExpToDrop());
-					});
-			} else
-				MinecraftServer.getServer().execute(() -> {
-
-					// Do not call event if isn't registered any listener
-					if (BlockBreakDropItemsEvent.getHandlerList().getRegisteredListeners().length == 0) {
-						if (!loot.getItems().isEmpty() && breakEvent.isDropItems())
-							for (ItemStack drop : loot.getItems())
-								player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
-						if (breakEvent.getExpToDrop() > 0)
-							player.getWorld().spawn(dropLoc, EntityType.EXPERIENCE_ORB.getEntityClass(), c -> {
-								ExperienceOrb orb = (ExperienceOrb) c;
-								orb.setExperience(breakEvent.getExpToDrop());
-							});
-						return;
-					}
-					if (!loot.getItems().isEmpty() && breakEvent.isDropItems()) {
-						BlockBreakDropItemsEvent event = new BlockBreakDropItemsEvent(breakEvent, loot);
-						Bukkit.getPluginManager().callEvent(event);
-						if (!event.isCancelled())
-							for (ItemStack drop : event.getLoot().getItems())
-								player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
-					}
-					if (breakEvent.getExpToDrop() > 0)
-						player.getWorld().spawn(dropLoc, EntityType.EXPERIENCE_ORB.getEntityClass(), c -> {
-							ExperienceOrb orb = (ExperienceOrb) c;
-							orb.setExperience(breakEvent.getExpToDrop());
-						});
-				});
-	}
-
-	private int damageTool(EntityPlayer player, net.minecraft.world.item.ItemStack item, int damage) {
-		int enchant = EnchantmentManager.a(Enchantments.w, item);
-
-		if (enchant > 0 && EnchantmentDurability.a(item, enchant, player.dQ()))
-			--damage;
-
-		PlayerItemDamageEvent event = new PlayerItemDamageEvent(player.getBukkitEntity(), CraftItemStack.asCraftMirror(item), damage);
-		if (!Bukkit.isPrimaryThread())
-			Ref.set(event, async, true);
-		Bukkit.getPluginManager().callEvent(event);
-
-		if (event.isCancelled())
-			return 0;
-
-		return event.getDamage();
-	}
-
-	private void processBlockBreak(PacketPlayInBlockDig packet, Player player, EntityPlayer nmsPlayer, IBlockData iblockdata, BlockPosition blockPos, Position pos, boolean dropItems,
-			boolean instantlyBroken) {
-		AsyncBlockBreakEvent event = new AsyncBlockBreakEvent(pos, player, BukkitLoader.getNmsProvider().toMaterial(iblockdata), instantlyBroken, BlockFace.valueOf(packet.c().name()));
-		event.setTileDrops(!Loader.DISABLE_TILE_DROPS);
-		event.setDropItems(dropItems);
-		if (instantlyBroken) {
-			PlayerInteractEvent interactEvent = new PlayerInteractEvent(player, Action.LEFT_CLICK_BLOCK, player.getItemInHand(), pos.getBlock(), event.getBlockFace());
-			if (PlayerInteractEvent.getHandlerList().getRegisteredListeners().length > 0) {
-				if (Loader.SYNC_EVENT) {
-					BukkitLoader.getNmsProvider().postToMainThread(() -> {
-						Bukkit.getPluginManager().callEvent(interactEvent);
-						if (interactEvent.isCancelled() || interactEvent.useInteractedBlock() == Result.DENY) {
-							sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
-							return;
-						}
-						// Drop exp only in survival / adventure gamemode
-						if (player.getGameMode() == GameMode.ADVENTURE || player.getGameMode() == GameMode.SURVIVAL)
-							if (nmsPlayer.d(iblockdata.b().m()))
-								event.setExpToDrop(iblockdata.b().getExpDrop(iblockdata, nmsPlayer.x(), blockPos, CraftItemStack.asNMSCopy(player.getItemInHand()), true));
-
-						// Do not call event if isn't registered any listener - instantly process async
-						if (BlockExpEvent.getHandlerList().getRegisteredListeners().length == 0) {
-							Ref.set(event, async, true);
-							breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
-							return;
-						}
-						Bukkit.getPluginManager().callEvent(event);
-						if (event.isCancelled()) {
-							sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
-							return;
-						}
-						breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
-					});
-					return;
-				}
-				Ref.set(interactEvent, async, true);
-				Bukkit.getPluginManager().callEvent(interactEvent);
-				if (event.isCancelled()) {
-					sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
-					return;
-				}
-			}
-		}
-
-		// Drop exp only in survival / adventure gamemode
-		if (player.getGameMode() == GameMode.ADVENTURE || player.getGameMode() == GameMode.SURVIVAL)
-			if (nmsPlayer.d(iblockdata.b().m()))
-				event.setExpToDrop(iblockdata.b().getExpDrop(iblockdata, nmsPlayer.x(), blockPos, CraftItemStack.asNMSCopy(player.getItemInHand()), true));
-
-		// Do not call event if isn't registered any listener - instantly process async
-		if (BlockExpEvent.getHandlerList().getRegisteredListeners().length == 0) {
-			Ref.set(event, async, true);
-			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
+		boolean onEast = blockData.c(east);
+		boolean onNorth = blockData.c(north);
+		boolean onSouth = blockData.c(south);
+		boolean onWest = blockData.c(west);
+		boolean onTop = blockData.c(up);
+		if (onTop) {
+			destroyChorus(start.clone().add(0, 1, 0), items, dropItems, 1);
 			return;
 		}
+		if (onEast)
+			destroyChorus(start.clone().add(BlockFace.EAST.getModX(), 0, BlockFace.EAST.getModZ()), items, dropItems, 0);
+		if (onNorth)
+			destroyChorus(start.clone().add(BlockFace.NORTH.getModX(), 0, BlockFace.NORTH.getModZ()), items, dropItems, 0);
+		if (onSouth)
+			destroyChorus(start.clone().add(BlockFace.SOUTH.getModX(), 0, BlockFace.SOUTH.getModZ()), items, dropItems, 0);
+		if (onWest)
+			destroyChorus(start.clone().add(BlockFace.WEST.getModX(), 0, BlockFace.WEST.getModZ()), items, dropItems, 0);
+	}
 
-		if (Loader.SYNC_EVENT)
-			BukkitLoader.getNmsProvider().postToMainThread(() -> {
-				Bukkit.getPluginManager().callEvent(event);
-				if (event.isCancelled()) {
-					sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
-					return;
-				}
-				breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
-			});
-		else {
-			Ref.set(event, async, true);
-			Bukkit.getPluginManager().callEvent(event);
-			if (event.isCancelled()) {
-				sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
+	/**
+	 * @apiNote Destroy chorus plant with flowers and continue to connected
+	 */
+	private void destroyChorus(Position start, LootTable items, boolean dropItems, int direction) {
+		IBlockData blockData = (IBlockData) start.getIBlockData();
+		if (blockData.getBukkitMaterial() == Material.CHORUS_FLOWER || blockData.getBukkitMaterial() == Material.POPPED_CHORUS_FRUIT) {
+			if (dropItems)
+				for (ItemStack item : start.getBlock().getDrops())
+					items.add(item);
+			removeBlock(start, false);
+			return;
+		}
+		if (!(blockData.b() instanceof BlockChorusFruit))
+			return;
+		if (dropItems)
+			for (ItemStack item : start.getBlock().getDrops())
+				items.add(item);
+		removeBlock(start, false);
+		boolean onEast = blockData.c(east);
+		boolean onNorth = blockData.c(north);
+		boolean onSouth = blockData.c(south);
+		boolean onWest = blockData.c(west);
+		boolean onTop = blockData.c(up);
+		if (onTop) {
+			destroyChorus(start.clone().add(0, 1, 0), items, dropItems, 1);
+			return;
+		}
+		if (direction == 0)
+			return; // 2x to the side?
+		if (onEast)
+			destroyChorus(start.clone().add(BlockFace.EAST.getModX(), 0, BlockFace.EAST.getModZ()), items, dropItems, 0);
+		if (onNorth)
+			destroyChorus(start.clone().add(BlockFace.NORTH.getModX(), 0, BlockFace.NORTH.getModZ()), items, dropItems, 0);
+		if (onSouth)
+			destroyChorus(start.clone().add(BlockFace.SOUTH.getModX(), 0, BlockFace.SOUTH.getModZ()), items, dropItems, 0);
+		if (onWest)
+			destroyChorus(start.clone().add(BlockFace.WEST.getModX(), 0, BlockFace.WEST.getModZ()), items, dropItems, 0);
+	}
+
+	/**
+	 * @apiNote Fix nearby chorus fruit plant
+	 */
+	private void onDestroyFlower(Position clone) {
+		// top?
+		clone.add(0, -1, 0);
+		IBlockData iblockdata = (IBlockData) clone.getIBlockData();
+		if (iblockdata.b() instanceof BlockChorusFruit) {
+			boolean on = iblockdata.c(up);
+			if (on) {
+				iblockdata = iblockdata.a(up, false);
+				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), iblockdata);
+				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, iblockdata));
 				return;
 			}
-			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
 		}
-	}
-
-	@Override
-	public boolean handle(String playerName, Object packetObject) {
-		PacketPlayInBlockDig packet = (PacketPlayInBlockDig) packetObject;
-		if (packet.d() == EnumPlayerDigType.c) { // stop
-			BlockPosition blockPos = packet.b();
-			Player player = Bukkit.getPlayer(playerName);
-			Position pos = new Position(player.getWorld(), blockPos.u(), blockPos.v(), blockPos.w());
-			IBlockData iblockdata = (IBlockData) pos.getIBlockData();
-			if (iblockdata.getBukkitMaterial() == Material.AIR || isInvalid(player, pos)) {
-				sendCancelPackets(packet, player, blockPos, iblockdata);
-				return true;
-			}
-
-			EntityPlayer nmsPlayer = ((CraftPlayer) player).getHandle();
-			processBlockBreak(packet, player, nmsPlayer, iblockdata, blockPos, pos, true, false);
-			return true;
-		}
-		if (packet.d() == EnumPlayerDigType.a) { // start
-			BlockPosition blockPos = packet.b();
-			Player player = Bukkit.getPlayer(playerName);
-			Position pos = new Position(player.getWorld(), blockPos.u(), blockPos.v(), blockPos.w());
-			IBlockData iblockdata = (IBlockData) pos.getIBlockData();
-			EntityPlayer nmsPlayer = ((CraftPlayer) player).getHandle();
-
-			if (player.getGameMode() == GameMode.CREATIVE) {
-				if (iblockdata.getBukkitMaterial() == Material.AIR || isInvalid(player, pos)) {
-					sendCancelPackets(packet, player, blockPos, iblockdata);
-					return true;
-				}
-				processBlockBreak(packet, player, nmsPlayer, iblockdata, blockPos, pos, false, true);
-				return true;
-			}
-			// iblockdata.a(nmsPlayer.s, blockPos, nmsPlayer); // hit block
-			float f = iblockdata.a(nmsPlayer, nmsPlayer.s, blockPos); // get damage
-			if (f >= 1.0F) {
-				if (iblockdata.getBukkitMaterial() == Material.AIR || isInvalid(player, pos)) {
-					sendCancelPackets(packet, player, blockPos, iblockdata);
-					return true;
-				}
-				processBlockBreak(packet, player, nmsPlayer, iblockdata, blockPos, pos, true, true);
-				return true;
+		// east?
+		clone.add(BlockFace.NORTH.getModX(), 0, BlockFace.NORTH.getModZ());
+		iblockdata = (IBlockData) clone.getIBlockData();
+		if (iblockdata.b() instanceof BlockChorusFruit) {
+			boolean on = iblockdata.c(east);
+			if (on) {
+				iblockdata = iblockdata.a(east, false);
+				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), iblockdata);
+				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, iblockdata));
+				return;
 			}
 		}
-		return false;
-	}
-
-	public void sendCancelPackets(PacketPlayInBlockDig packet, Player player, BlockPosition blockPos, IBlockData iblockdata) {
-		BukkitLoader.getPacketHandler().send(player, new PacketPlayOutBlockChange(blockPos, iblockdata));
-		BukkitLoader.getPacketHandler().send(player, new ClientboundBlockChangedAckPacket(packet.e()));
-	}
-
-	private boolean isWaterlogged(IBlockData data) {
-		if (data.getBukkitMaterial() == Material.SEAGRASS || data.getBukkitMaterial() == Material.TALL_SEAGRASS || data.getBukkitMaterial() == Material.KELP
-				|| data.getBukkitMaterial() == Material.KELP_PLANT)
-			return true;
-		return !data.b(waterlogged) ? false : data.c(waterlogged);
+		// north?
+		clone.add(BlockFace.EAST.getModX(), 0, BlockFace.EAST.getModZ());
+		iblockdata = (IBlockData) clone.getIBlockData();
+		if (iblockdata.b() instanceof BlockChorusFruit) {
+			boolean on = iblockdata.c(north);
+			if (on) {
+				iblockdata = iblockdata.a(north, false);
+				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), iblockdata);
+				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, iblockdata));
+				return;
+			}
+		}
+		// west?
+		clone.add(BlockFace.SOUTH.getModX(), 0, BlockFace.SOUTH.getModZ());
+		iblockdata = (IBlockData) clone.getIBlockData();
+		if (iblockdata.b() instanceof BlockChorusFruit) {
+			boolean on = iblockdata.c(west);
+			if (on) {
+				iblockdata = iblockdata.a(west, false);
+				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), iblockdata);
+				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, iblockdata));
+				return;
+			}
+		}
+		// south?
+		clone.add(BlockFace.WEST.getModX(), 0, BlockFace.WEST.getModZ());
+		iblockdata = (IBlockData) clone.getIBlockData();
+		if (iblockdata.b() instanceof BlockChorusFruit) {
+			boolean on = iblockdata.c(south);
+			if (on) {
+				iblockdata = iblockdata.a(south, false);
+				BukkitLoader.getNmsProvider().setBlock(clone.getNMSChunk(), clone.getBlockX(), clone.getBlockY(), clone.getBlockZ(), iblockdata);
+				BukkitLoader.getPacketHandler().send(clone.getWorld().getPlayers(), BukkitLoader.getNmsProvider().packetBlockChange(clone, iblockdata));
+			}
+		}
 	}
 }

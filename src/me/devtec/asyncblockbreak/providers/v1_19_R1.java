@@ -647,7 +647,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 							items.add(item);
 					removeBlock(clone, isWaterlogged(blockData));
 				}
-			} else if (type.name().endsWith("_SIGN")
+			} else if (type.name().endsWith("_PRESSURE_PLATE") || type.name().endsWith("_SIGN")
 					|| !type.isSolid() && !type.name().contains("WALL_") && !(type == Material.WEEPING_VINES || type == Material.WEEPING_VINES_PLANT) && !type.name().endsWith("_HEAD")) {
 				if (dropItems)
 					for (ItemStack item : clone.getBlock().getDrops())

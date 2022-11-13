@@ -1235,17 +1235,19 @@ public class BlocksCalculator_v1_19_R1 {
 	private void destroyContainerTile(Map<Position, BlockActionContext> map, Player player, Position destroyed, IBlockData iblockdata) {
 		// Items
 		TileEntity container = ((Chunk) destroyed.getNMSChunk()).getTileEntityImmediately((BlockPosition) destroyed.getBlockPosition());
-		if (container != null && container instanceof TileEntityLectern lectern)
+		if (container == null)
+			return;
+		if (container instanceof TileEntityLectern lectern) {
 			if (lectern.c() != null)
 				map.get(destroyed).loot.add(CraftItemStack.asBukkitCopy(lectern.c())); // add lectern book
-			else if (container != null && container instanceof TileEntityShulkerBox shulker) {
-				map.get(destroyed).loot.clear(); // remove empty shulker box
-				ItemStack item = new ItemStack(IRegistry.Y.a(new MinecraftKey("minecraft:" + (shulker.j() == null ? "shulker_box" : shulker.j().name().toLowerCase() + "_shulker_box"))));
-				shulker.e(item);
-				map.get(destroyed).loot.add(CraftItemStack.asBukkitCopy(item)); // add filled shulker box
-			} else if (container != null && container instanceof TileEntityContainer tileChest)
-				for (ItemStack item : tileChest.getContents())
-					map.get(destroyed).loot.add(CraftItemStack.asBukkitCopy(item));
+		} else if (container instanceof TileEntityShulkerBox shulker) {
+			map.get(destroyed).loot.clear(); // remove empty shulker box
+			ItemStack item = new ItemStack(IRegistry.Y.a(new MinecraftKey("minecraft:" + (shulker.j() == null ? "shulker_box" : shulker.j().name().toLowerCase() + "_shulker_box"))));
+			shulker.e(item);
+			map.get(destroyed).loot.add(CraftItemStack.asBukkitCopy(item)); // add filled shulker box
+		} else if (container instanceof TileEntityContainer tileChest)
+			for (ItemStack item : tileChest.getContents())
+				map.get(destroyed).loot.add(CraftItemStack.asBukkitCopy(item));
 	}
 
 	private void destroyChest(Map<Position, BlockActionContext> map, Player player, Position destroyed, IBlockData iblockdata) {

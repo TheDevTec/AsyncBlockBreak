@@ -1,14 +1,25 @@
 package me.devtec.asyncblockbreak.events;
 
+import java.util.Map;
+
+import org.bukkit.Material;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.craftbukkit.v1_19_R1.CraftWorld;
+import org.bukkit.craftbukkit.v1_19_R1.block.CraftBlock;
+import org.bukkit.craftbukkit.v1_19_R1.block.data.CraftBlockData;
+import org.bukkit.craftbukkit.v1_19_R1.util.CraftMagicNumbers;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.util.Consumer;
 
 import me.devtec.asyncblockbreak.api.LootTable;
+import me.devtec.asyncblockbreak.utils.BlockActionContext;
 import me.devtec.theapi.bukkit.game.BlockDataStorage;
 import me.devtec.theapi.bukkit.game.Position;
+import net.minecraft.core.BlockPosition;
+import net.minecraft.world.level.block.state.IBlockData;
 
 public class AsyncBlockBreakEvent extends BlockBreakEvent {
 	private BlockDataStorage blockData;
@@ -18,12 +29,57 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 	private Consumer<Item> consumer;
 	private LootTable loot;
 	private Position pos;
+	private Map<Position, BlockActionContext> modifiedBlocks;
 
-	public AsyncBlockBreakEvent(Position pos, Player player, BlockDataStorage blockData, boolean instantlyBroken, BlockFace face) {
-		super(pos.getBlock(), player);
+	public AsyncBlockBreakEvent(Position initBlock, Map<Position, BlockActionContext> modifiedBlocks, Player player, BlockDataStorage blockData, boolean instantlyBroken, BlockFace face) {
+
+		super(new CraftBlock(((CraftWorld) initBlock.getWorld()).getHandle(), (BlockPosition) initBlock.getBlockPosition()) {
+
+			BlockActionContext main = modifiedBlocks.get(initBlock);
+			IBlockData data = (IBlockData) initBlock.getIBlockData();
+			Material type = data.getBukkitMaterial();
+
+			@Override
+			public IBlockData getNMS() {
+				return data;
+			}
+
+			@Override
+			public byte getData() {
+				return CraftMagicNumbers.toLegacyData(data);
+			}
+
+			@Override
+			public Material getType() {
+				return type;
+			}
+
+			@Override
+			public void setType(Material type, boolean applyPhysics) {
+				this.type = type;
+				main.setType(type);
+				data = (IBlockData) main.getIBlockData();
+			}
+
+			@Override
+			public void setBlockData(BlockData data, boolean applyPhysics) {
+				type = data.getMaterial();
+				IBlockData nms = ((CraftBlockData) data).getState();
+				main.setIBlockData(nms);
+				this.data = nms;
+			}
+
+			@Override
+			public void setData(byte data, boolean applyPhysics) {
+				IBlockData nms = CraftMagicNumbers.getBlock(getType(), data);
+				main.setIBlockData(nms);
+				this.data = nms;
+			}
+		}, player);
 		this.blockData = blockData;
 		isInstant = instantlyBroken;
-		this.pos = pos;
+		pos = initBlock;
+		this.modifiedBlocks = modifiedBlocks;
 		this.face = face;
 		tileDrops = true;
 		loot = new LootTable();
@@ -35,6 +91,10 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 
 	public Position getPosition() {
 		return pos;
+	}
+
+	public Map<Position, BlockActionContext> getModifiedBlocks() {
+		return modifiedBlocks;
 	}
 
 	public BlockFace getBlockFace() {

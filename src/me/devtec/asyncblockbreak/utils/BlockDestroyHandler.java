@@ -1,6 +1,7 @@
 package me.devtec.asyncblockbreak.utils;
 
 import java.lang.reflect.Constructor;
+import java.util.Map;
 
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
@@ -95,6 +96,8 @@ public interface BlockDestroyHandler {
 		Loader.destroyedCountInTick.put(player.getUniqueId(), destroyedBlocks);
 		return false;
 	}
+
+	Map<Position, BlockActionContext> calculateChangedBlocks(Position destroyed, Player player);
 
 	default void announce(String text) {
 		if (Loader.BROADCAST_CONSOLE)

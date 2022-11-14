@@ -46,6 +46,7 @@ import net.minecraft.network.protocol.game.PacketPlayOutBlockChange;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.EntityPlayer;
 import net.minecraft.server.level.WorldServer;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.EnumHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.EntityFallingBlock;
@@ -308,7 +309,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	private int damageTool(EntityPlayer player, net.minecraft.world.item.ItemStack item, int damage) {
 		int enchant = EnchantmentManager.a(Enchantments.w, item);
 
-		if (enchant > 0 && EnchantmentDurability.a(item, enchant, player.dQ()))
+		if (enchant > 0 && EnchantmentDurability.a(item, enchant, RandomSource.a()))
 			--damage;
 
 		PlayerItemDamageEvent event = new PlayerItemDamageEvent(player.getBukkitEntity(), CraftItemStack.asCraftMirror(item), damage);

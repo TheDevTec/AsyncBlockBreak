@@ -33,6 +33,7 @@ import me.devtec.asyncblockbreak.Loader;
 import me.devtec.asyncblockbreak.api.LootTable;
 import me.devtec.asyncblockbreak.events.AsyncBlockBreakEvent;
 import me.devtec.asyncblockbreak.events.BlockBreakDropItemsEvent;
+import me.devtec.asyncblockbreak.providers.math.ThreadAccessRandomSource;
 import me.devtec.asyncblockbreak.utils.BlockActionContext;
 import me.devtec.asyncblockbreak.utils.BlockDestroyHandler;
 import me.devtec.shared.Ref;
@@ -46,11 +47,9 @@ import net.minecraft.network.protocol.game.PacketPlayOutBlockChange;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.EntityPlayer;
 import net.minecraft.server.level.WorldServer;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.EnumHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.EntityFallingBlock;
-import net.minecraft.world.item.enchantment.EnchantmentDurability;
 import net.minecraft.world.item.enchantment.EnchantmentManager;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.ChunkCoordIntPair;
@@ -58,6 +57,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.IBlockData;
 import net.minecraft.world.level.chunk.Chunk;
 import net.minecraft.world.level.entity.PersistentEntitySectionManager;
+import net.minecraft.world.level.levelgen.RandomSupport;
 
 public class v1_19_R1 implements BlockDestroyHandler {
 	static Field async = Ref.field(Event.class, "async");
@@ -247,7 +247,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		// Drop items & exp
 		Location dropLoc = pos.add(0.5, 0, 0.5).toLocation();
 		if (!loot.getItems().isEmpty() && breakEvent.isDropItems() || breakEvent.getExpToDrop() > 0)
-			if (Bukkit.isPrimaryThread()) {
+			MinecraftServer.getServer().execute(() -> {
 
 				// Do not call event if isn't registered any listener
 				if (BlockBreakDropItemsEvent.getHandlerList().getRegisteredListeners().length == 0) {
@@ -273,35 +273,10 @@ public class v1_19_R1 implements BlockDestroyHandler {
 						ExperienceOrb orb = (ExperienceOrb) c;
 						orb.setExperience(breakEvent.getExpToDrop());
 					});
-			} else
-				MinecraftServer.getServer().execute(() -> {
-
-					// Do not call event if isn't registered any listener
-					if (BlockBreakDropItemsEvent.getHandlerList().getRegisteredListeners().length == 0) {
-						if (!loot.getItems().isEmpty() && breakEvent.isDropItems())
-							for (ItemStack drop : loot.getItems())
-								player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
-						if (breakEvent.getExpToDrop() > 0)
-							player.getWorld().spawn(dropLoc, EntityType.EXPERIENCE_ORB.getEntityClass(), c -> {
-								ExperienceOrb orb = (ExperienceOrb) c;
-								orb.setExperience(breakEvent.getExpToDrop());
-							});
-						return;
-					}
-					if (!loot.getItems().isEmpty() && breakEvent.isDropItems()) {
-						BlockBreakDropItemsEvent event = new BlockBreakDropItemsEvent(breakEvent, loot);
-						Bukkit.getPluginManager().callEvent(event);
-						if (!event.isCancelled())
-							for (ItemStack drop : event.getLoot().getItems())
-								player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
-					}
-					if (breakEvent.getExpToDrop() > 0)
-						player.getWorld().spawn(dropLoc, EntityType.EXPERIENCE_ORB.getEntityClass(), c -> {
-							ExperienceOrb orb = (ExperienceOrb) c;
-							orb.setExperience(breakEvent.getExpToDrop());
-						});
-				});
+			});
 	}
+
+	private ThreadAccessRandomSource UNBREAKING_RANDOM_SOURCE = new ThreadAccessRandomSource(RandomSupport.a());
 
 	/**
 	 * @apiNote Call PlayerItemDamageEvent and damage item
@@ -309,7 +284,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	private int damageTool(EntityPlayer player, net.minecraft.world.item.ItemStack item, int damage) {
 		int enchant = EnchantmentManager.a(Enchantments.w, item);
 
-		if (enchant > 0 && EnchantmentDurability.a(item, enchant, RandomSource.a()))
+		if (enchant > 0 && a(item, enchant, UNBREAKING_RANDOM_SOURCE))
 			--damage;
 
 		PlayerItemDamageEvent event = new PlayerItemDamageEvent(player.getBukkitEntity(), CraftItemStack.asCraftMirror(item), damage);
@@ -321,6 +296,12 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			return 0;
 
 		return event.getDamage();
+	}
+
+	public static boolean a(net.minecraft.world.item.ItemStack item, int level, ThreadAccessRandomSource random) {
+		if (item.c() instanceof net.minecraft.world.item.ItemArmor && random.i() < 0.6F)
+			return false;
+		return random.a(level + 1) > 0;
 	}
 
 	/**

@@ -33,6 +33,7 @@ import net.minecraft.world.level.block.BlockFurnace;
 import net.minecraft.world.level.block.BlockHopper;
 import net.minecraft.world.level.block.BlockLeaves;
 import net.minecraft.world.level.block.BlockLectern;
+import net.minecraft.world.level.block.BlockStairs;
 import net.minecraft.world.level.block.BlockTall;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.TileEntity;
@@ -46,6 +47,7 @@ import net.minecraft.world.level.block.state.properties.BlockPropertyBedPart;
 import net.minecraft.world.level.block.state.properties.BlockPropertyChestType;
 import net.minecraft.world.level.block.state.properties.BlockPropertyDoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.BlockPropertyRedstoneSide;
+import net.minecraft.world.level.block.state.properties.BlockPropertyStairsShape;
 import net.minecraft.world.level.block.state.properties.BlockPropertyTrackPosition;
 import net.minecraft.world.level.block.state.properties.BlockPropertyWallHeight;
 import net.minecraft.world.level.block.state.properties.DripstoneThickness;
@@ -76,6 +78,8 @@ public class BlocksCalculator_v1_19_R1 {
 	static IBlockState<BlockPropertyRedstoneSide> south_redstone = BlockProperties.ac;
 	static IBlockState<BlockPropertyRedstoneSide> west_redstone = BlockProperties.ad;
 
+	static IBlockState<BlockPropertyStairsShape> stairsShape = BlockProperties.bj;
+
 	static IBlockState<Boolean> PISTON_ACTIVATED = BlockProperties.g;
 	static IBlockState<EnumDirection> DIRECTION = BlockProperties.Q;
 	static IBlockState<BlockPropertyTrackPosition> TRACK_SHAPE = BlockProperties.ag;
@@ -87,7 +91,10 @@ public class BlocksCalculator_v1_19_R1 {
 		map.put(destroyed, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(player.getItemInHand(), destroyed, iblockdata, player)));
 
 		Material material = iblockdata.getBukkitMaterial();
-		if (material == Material.RAIL)
+		if (iblockdata.b() instanceof BlockStairs) {
+			BlockPropertyStairsShape shape = iblockdata.c(stairsShape);
+			checkAndModifyStairs(map, destroyed.clone(), shape, BlockFace.valueOf(iblockdata.c(direction).name()));
+		} else if (material == Material.RAIL)
 			for (BlockFace faces : AXIS_FACES) {
 				Position cloned2 = destroyed.clone().add(faces);
 				iblockdata = getIBlockDataOrEmpty(map, cloned2);
@@ -198,6 +205,70 @@ public class BlocksCalculator_v1_19_R1 {
 		return map;
 	}
 
+	private void checkAndModifyStairs(Map<Position, BlockActionContext> map, Position clone, BlockPropertyStairsShape shape, BlockFace dir) {
+		Position first = clone;
+		Position second = clone;
+		switch (shape) {
+		case d:
+		case e:
+			switch (dir) {
+			case EAST:
+			case NORTH:
+				first = clone.clone().add(BlockFace.EAST);
+				second = clone.clone().add(BlockFace.NORTH);
+				break;
+			case WEST:
+			case SOUTH:
+				first = clone.clone().add(BlockFace.WEST);
+				second = clone.clone().add(BlockFace.SOUTH);
+				break;
+			default:
+				break;
+			}
+			break;
+		case b:
+		case c:
+			switch (dir) {
+			case SOUTH:
+			case NORTH:
+				first = clone.clone().add(BlockFace.EAST);
+				second = clone.clone().add(BlockFace.SOUTH);
+				break;
+			case WEST:
+			case EAST:
+				first = clone.clone().add(BlockFace.EAST);
+				second = clone.clone().add(BlockFace.NORTH);
+				break;
+			default:
+				break;
+			}
+			break;
+		case a:
+			switch (dir) {
+			case EAST:
+			case WEST:
+				first = clone.clone().add(BlockFace.NORTH);
+				second = clone.clone().add(BlockFace.SOUTH);
+				break;
+			case NORTH:
+			case SOUTH:
+				first = clone.clone().add(BlockFace.EAST);
+				second = clone.clone().add(BlockFace.WEST);
+				break;
+			default:
+				break;
+			}
+			break;
+		}
+		IBlockData ib = (IBlockData) first.getIBlockData();
+		if (ib.b(stairsShape) && ib.c(stairsShape) != BlockPropertyStairsShape.a)
+			map.put(first, BlockActionContext.updateState(ib.a(stairsShape, BlockPropertyStairsShape.a)));
+
+		ib = (IBlockData) second.getIBlockData();
+		if (ib.b(stairsShape) && ib.c(stairsShape) != BlockPropertyStairsShape.a)
+			map.put(second, BlockActionContext.updateState(ib.a(stairsShape, BlockPropertyStairsShape.a)));
+	}
+
 	private boolean isContainerTile(Block b) {
 		return b instanceof BlockBarrel || b instanceof BlockChest || b instanceof BlockFurnace || b instanceof BlockHopper || b instanceof BlockLectern || b instanceof BlockDispenser;
 	}
@@ -291,7 +362,9 @@ public class BlocksCalculator_v1_19_R1 {
 		Material material = iblockdata.getBukkitMaterial();
 		if (shouldSkip(material)) {
 			// ignored
-		} else if (material == Material.SCULK_VEIN) {
+		} else if (isAmethyst(material) && iblockdata.c(DIRECTION) == EnumDirection.b)
+			map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+		else if (material == Material.SCULK_VEIN) {
 			if (!iblockdata.c(east) && !iblockdata.c(north) && !iblockdata.c(south) && !iblockdata.c(west) && !iblockdata.c(up))
 				map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 			else
@@ -373,7 +446,9 @@ public class BlocksCalculator_v1_19_R1 {
 		material = iblockdata.getBukkitMaterial();
 		if (shouldSkip(material)) {
 			// ignored
-		} else if (material == Material.SCULK_VEIN) {
+		} else if (isAmethyst(material) && iblockdata.c(DIRECTION) == EnumDirection.a)
+			map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+		else if (material == Material.SCULK_VEIN) {
 			if (!iblockdata.c(east) && !iblockdata.c(north) && !iblockdata.c(south) && !iblockdata.c(west) && !iblockdata.c(down))
 				map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 			else
@@ -437,7 +512,9 @@ public class BlocksCalculator_v1_19_R1 {
 			material = iblockdata.getBukkitMaterial();
 			if (shouldSkip(material)) {
 				// ignored
-			} else if (material == Material.SCULK_VEIN)
+			} else if (isAmethyst(material) && iblockdata.c(DIRECTION) == EnumDirection.valueOf(face.name()))
+				map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+			else if (material == Material.SCULK_VEIN)
 				switch (face) {
 				case EAST:
 					if (!iblockdata.c(down) && !iblockdata.c(north) && !iblockdata.c(south) && !iblockdata.c(east) && !iblockdata.c(up))
@@ -507,6 +584,19 @@ public class BlocksCalculator_v1_19_R1 {
 					}
 			}
 		}
+	}
+
+	private boolean isAmethyst(Material material) {
+		switch (material) {
+		case AMETHYST_CLUSTER:
+		case LARGE_AMETHYST_BUD:
+		case MEDIUM_AMETHYST_BUD:
+		case SMALL_AMETHYST_BUD:
+			return true;
+		default:
+			break;
+		}
+		return false;
 	}
 
 	private boolean shouldSkip(Material material) {

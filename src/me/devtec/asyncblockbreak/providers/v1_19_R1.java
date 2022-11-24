@@ -57,7 +57,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.IBlockData;
 import net.minecraft.world.level.chunk.Chunk;
 import net.minecraft.world.level.entity.PersistentEntitySectionManager;
-import net.minecraft.world.level.levelgen.RandomSupport;
 
 public class v1_19_R1 implements BlockDestroyHandler {
 	static Field async = Ref.field(Event.class, "async");
@@ -65,6 +64,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 
 	private boolean IS_PAPER = Ref.getClass("io.papermc.paper.chunk.system.scheduling.NewChunkHolder") != null;
 	private Field persistentEntitySectionManager = IS_PAPER ? null : Ref.field(Ref.nms("server.level", "WorldServer"), "P");
+
+	private ThreadAccessRandomSource UNBREAKING_RANDOM_SOURCE = new ThreadAccessRandomSource();
 
 	@Override
 	public Map<Position, BlockActionContext> calculateChangedBlocks(Position destroyed, Player player) {
@@ -233,7 +234,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		net.minecraft.world.item.ItemStack itemInHand = nmsPlayer.b(EnumHand.a);
 		short maxDamage = CraftMagicNumbers.getMaterial(itemInHand.c()).getMaxDurability();
 		if (maxDamage > 0) { // Is tool/armor
-			int damage = damageTool(nmsPlayer, itemInHand, itemInHand.u != null && itemInHand.u.q("Unbreakable") ? 0 : 1);
+			int damage = damageTool(nmsPlayer, itemInHand, itemInHand.u() != null && itemInHand.u().q("Unbreakable") ? 0 : 1);
 			if (damage > 0)
 				if (itemInHand.j() + damage >= CraftMagicNumbers.getMaterial(itemInHand.c()).getMaxDurability())
 					nmsPlayer.a(EnumHand.a, net.minecraft.world.item.ItemStack.b);
@@ -276,15 +277,13 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			});
 	}
 
-	private ThreadAccessRandomSource UNBREAKING_RANDOM_SOURCE = new ThreadAccessRandomSource(RandomSupport.a());
-
 	/**
 	 * @apiNote Call PlayerItemDamageEvent and damage item
 	 */
 	private int damageTool(EntityPlayer player, net.minecraft.world.item.ItemStack item, int damage) {
 		int enchant = EnchantmentManager.a(Enchantments.w, item);
 
-		if (enchant > 0 && a(item, enchant, UNBREAKING_RANDOM_SOURCE))
+		if (enchant > 0 && genDamageChance(item, enchant, UNBREAKING_RANDOM_SOURCE))
 			--damage;
 
 		PlayerItemDamageEvent event = new PlayerItemDamageEvent(player.getBukkitEntity(), CraftItemStack.asCraftMirror(item), damage);
@@ -298,10 +297,10 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		return event.getDamage();
 	}
 
-	public static boolean a(net.minecraft.world.item.ItemStack item, int level, ThreadAccessRandomSource random) {
-		if (item.c() instanceof net.minecraft.world.item.ItemArmor && random.i() < 0.6F)
+	public static boolean genDamageChance(net.minecraft.world.item.ItemStack item, int level, ThreadAccessRandomSource random) {
+		if (item.c() instanceof net.minecraft.world.item.ItemArmor && random.floatChance() < 0.6F)
 			return false;
-		return random.a(level + 1) > 0;
+		return random.percentChance(level + 1) > 0;
 	}
 
 	/**

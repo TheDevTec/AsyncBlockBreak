@@ -53,7 +53,9 @@ import net.minecraft.world.entity.item.EntityFallingBlock;
 import net.minecraft.world.item.enchantment.EnchantmentManager;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.ChunkCoordIntPair;
+import net.minecraft.world.level.World;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DropExperienceBlock;
 import net.minecraft.world.level.block.state.IBlockData;
 import net.minecraft.world.level.chunk.Chunk;
 import net.minecraft.world.level.entity.PersistentEntitySectionManager;
@@ -65,11 +67,16 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	private boolean IS_PAPER = Ref.getClass("io.papermc.paper.chunk.system.scheduling.NewChunkHolder") != null;
 	private Field persistentEntitySectionManager = IS_PAPER ? null : Ref.field(Ref.nms("server.level", "WorldServer"), "P");
 
-	private ThreadAccessRandomSource UNBREAKING_RANDOM_SOURCE = new ThreadAccessRandomSource();
+	private ThreadAccessRandomSource RANDOM_SOURCE = new ThreadAccessRandomSource();
+	private BlocksCalculator_v1_19_R1 calculator = new BlocksCalculator_v1_19_R1();
 
 	@Override
 	public Map<Position, BlockActionContext> calculateChangedBlocks(Position destroyed, Player player) {
-		return new BlocksCalculator_v1_19_R1().calculateChangedBlocks(destroyed, player);
+		return calculateChangedBlocks(destroyed, player, ((CraftPlayer) player).getHandle().fA().f());
+	}
+
+	public Map<Position, BlockActionContext> calculateChangedBlocks(Position destroyed, Player player, net.minecraft.world.item.ItemStack itemInHand) {
+		return calculator.calculateChangedBlocks(destroyed, player, itemInHand);
 	}
 
 	@Override
@@ -105,7 +112,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				return true;
 			}
 			// iblockdata.a(nmsPlayer.s, blockPos, nmsPlayer); // hit block
-			float f = iblockdata.a(nmsPlayer, nmsPlayer.s, blockPos); // get damage
+			float f = getDamageOfBlock(iblockdata, nmsPlayer, nmsPlayer.s, blockPos); // get damage
 			if (f >= 1.0F) {
 				if (iblockdata.getBukkitMaterial().isAir() || isInvalid(player, pos)) {
 					sendCancelPackets(packet, player, blockPos, iblockdata);
@@ -118,6 +125,14 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		return false;
 	}
 
+	private float getDamageOfBlock(IBlockData iblockdata, EntityPlayer nmsPlayer, World world, BlockPosition blockPos) {
+		final float hardness = iblockdata.h(world, blockPos);
+		if (hardness == -1.0f)
+			return 0.0f;
+		final int i = nmsPlayer.d(iblockdata) ? 30 : 100;
+		return nmsPlayer.c(iblockdata) / hardness / i;
+	}
+
 	/**
 	 * @apiNote Call AsyncBlockBreakEvent and convert whole block break to the sync
 	 *          if needed
@@ -128,6 +143,9 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				BlockFace.valueOf(packet.c().name()));
 		event.setTileDrops(!Loader.DISABLE_TILE_DROPS);
 		event.setDropItems(dropItems);
+
+		net.minecraft.world.item.ItemStack hand = nmsPlayer.fA().f();
+
 		if (instantlyBroken) {
 			PlayerInteractEvent interactEvent = new PlayerInteractEvent(player, Action.LEFT_CLICK_BLOCK, player.getItemInHand(), pos.getBlock(), event.getBlockFace());
 			if (PlayerInteractEvent.getHandlerList().getRegisteredListeners().length > 0) {
@@ -140,13 +158,12 @@ public class v1_19_R1 implements BlockDestroyHandler {
 						}
 						// Drop exp only in survival / adventure gamemode
 						if (player.getGameMode() == GameMode.ADVENTURE || player.getGameMode() == GameMode.SURVIVAL)
-							if (nmsPlayer.d(iblockdata.b().m()))
-								event.setExpToDrop(iblockdata.b().getExpDrop(iblockdata, nmsPlayer.x(), blockPos, CraftItemStack.asNMSCopy(player.getItemInHand()), true));
+							genExpsFromBlock(event, nmsPlayer, hand, iblockdata);
 
 						// Do not call event if isn't registered any listener - instantly process async
 						if (BlockExpEvent.getHandlerList().getRegisteredListeners().length == 0) {
 							Ref.set(event, async, true);
-							breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
+							breakBlock(player, pos, iblockdata, nmsPlayer, packet, event, hand);
 							return;
 						}
 						Bukkit.getPluginManager().callEvent(event);
@@ -154,7 +171,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 							sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
 							return;
 						}
-						breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
+						breakBlock(player, pos, iblockdata, nmsPlayer, packet, event, hand);
 					});
 					return;
 				}
@@ -169,14 +186,12 @@ public class v1_19_R1 implements BlockDestroyHandler {
 
 		// Drop exp only in survival / adventure gamemode
 		if (player.getGameMode() == GameMode.ADVENTURE || player.getGameMode() == GameMode.SURVIVAL)
-			if (nmsPlayer.d(iblockdata.b().m()))
-				event.setExpToDrop(iblockdata.b().getExpDrop(iblockdata, nmsPlayer.x(), blockPos, CraftItemStack.asNMSCopy(player.getItemInHand()), true));
+			genExpsFromBlock(event, nmsPlayer, hand, iblockdata);
 
 		// Do not call event if isn't registered any listener - instantly process async
 		if (BlockExpEvent.getHandlerList().getRegisteredListeners().length == 0) {
 			Ref.set(event, async, true);
-			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
-			return;
+			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event, hand);
 		}
 
 		if (Loader.SYNC_EVENT)
@@ -186,7 +201,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 					sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
 					return;
 				}
-				breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
+				breakBlock(player, pos, iblockdata, nmsPlayer, packet, event, hand);
 			});
 		else {
 			Ref.set(event, async, true);
@@ -195,7 +210,51 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
 				return;
 			}
-			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event);
+			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event, hand);
+		}
+	}
+
+	private void genExpsFromBlock(AsyncBlockBreakEvent event, EntityPlayer nmsPlayer, net.minecraft.world.item.ItemStack hand, IBlockData iblockdata) {
+		if (nmsPlayer.d(iblockdata) && (EnchantmentManager.a(Enchantments.v, hand) == 0)) { // no silktouch
+			if (iblockdata.b() instanceof DropExperienceBlock expBlock)
+				event.setExpToDrop(1 + RANDOM_SOURCE.percentChance(5));
+			switch (iblockdata.getBukkitMaterial()) {
+			case COAL_ORE:
+			case DEEPSLATE_COAL_ORE:
+				event.setExpToDrop(1 + RANDOM_SOURCE.percentChance(2));
+				break;
+			case NETHER_GOLD_ORE:
+				event.setExpToDrop(1 + RANDOM_SOURCE.percentChance(1));
+				break;
+			case DIAMOND_ORE:
+			case DEEPSLATE_DIAMOND_ORE:
+			case EMERALD_ORE:
+			case DEEPSLATE_EMERALD_ORE:
+				event.setExpToDrop(3 + RANDOM_SOURCE.percentChance(7));
+				break;
+			case REDSTONE_ORE:
+			case DEEPSLATE_REDSTONE_ORE:
+				event.setExpToDrop(1 + RANDOM_SOURCE.percentChance(5));
+				break;
+			case LAPIS_ORE:
+			case DEEPSLATE_LAPIS_ORE:
+			case NETHER_QUARTZ_ORE:
+				event.setExpToDrop(2 + RANDOM_SOURCE.percentChance(5));
+				break;
+			case SPAWNER:
+				event.setExpToDrop(15 + RANDOM_SOURCE.percentChance(43));
+				break;
+			case SCULK:
+				event.setExpToDrop(1);
+				break;
+			case SCULK_SENSOR:
+			case SCULK_SHRIEKER:
+			case SCULK_CATALYST:
+				event.setExpToDrop(5);
+				break;
+			default:
+				break;
+			}
 		}
 	}
 
@@ -204,7 +263,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	 *          AsyncBlockBreakEvent, see
 	 *          {@link v1_19_R1#processBlockBreak(PacketPlayInBlockDig, Player, EntityPlayer, IBlockData, BlockPosition, Position, boolean, boolean)}
 	 */
-	public void breakBlock(Player player, Position pos, IBlockData iblockdata, EntityPlayer nmsPlayer, PacketPlayInBlockDig packet, AsyncBlockBreakEvent breakEvent) {
+	public void breakBlock(Player player, Position pos, IBlockData iblockdata, EntityPlayer nmsPlayer, PacketPlayInBlockDig packet, AsyncBlockBreakEvent breakEvent,
+			net.minecraft.world.item.ItemStack itemInHand) {
 		LootTable loot = breakEvent.getLoot();
 		// Add loot from block to the LootTable
 
@@ -231,12 +291,11 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		BukkitLoader.getNmsProvider().postToMainThread(() -> physics.forEach(t -> t.updatePhysics(AIR)));
 
 		// Damage tool
-		net.minecraft.world.item.ItemStack itemInHand = nmsPlayer.b(EnumHand.a);
 		short maxDamage = CraftMagicNumbers.getMaterial(itemInHand.c()).getMaxDurability();
 		if (maxDamage > 0) { // Is tool/armor
 			int damage = damageTool(nmsPlayer, itemInHand, itemInHand.u() != null && itemInHand.u().q("Unbreakable") ? 0 : 1);
 			if (damage > 0)
-				if (itemInHand.j() + damage >= CraftMagicNumbers.getMaterial(itemInHand.c()).getMaxDurability())
+				if (itemInHand.j() + damage >= maxDamage)
 					nmsPlayer.a(EnumHand.a, net.minecraft.world.item.ItemStack.b);
 				else
 					itemInHand.b(itemInHand.j() + damage);
@@ -283,7 +342,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	private int damageTool(EntityPlayer player, net.minecraft.world.item.ItemStack item, int damage) {
 		int enchant = EnchantmentManager.a(Enchantments.w, item);
 
-		if (enchant > 0 && genDamageChance(item, enchant, UNBREAKING_RANDOM_SOURCE))
+		if (enchant > 0 && genDamageChance(item, enchant, RANDOM_SOURCE))
 			--damage;
 
 		PlayerItemDamageEvent event = new PlayerItemDamageEvent(player.getBukkitEntity(), CraftItemStack.asCraftMirror(item), damage);

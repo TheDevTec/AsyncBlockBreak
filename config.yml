@@ -8,7 +8,6 @@ settings:
   # Should ladder works same as vines?
   # Look at: https://imgur.com/a/UGGnaRb
   ladder_works_as_vine: false
-  # Performance settings which can modify how vanilla minecraft works
 
 anticheat:
   # AntiCheat - Anti Nuke protection

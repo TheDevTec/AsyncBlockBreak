@@ -1,5 +1,6 @@
 package me.devtec.asyncblockbreak.events;
 
+import java.util.Collection;
 import java.util.Map;
 
 import org.bukkit.Material;
@@ -9,9 +10,11 @@ import org.bukkit.craftbukkit.v1_19_R1.CraftWorld;
 import org.bukkit.craftbukkit.v1_19_R1.block.CraftBlock;
 import org.bukkit.craftbukkit.v1_19_R1.block.data.CraftBlockData;
 import org.bukkit.craftbukkit.v1_19_R1.util.CraftMagicNumbers;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.Consumer;
 
 import me.devtec.asyncblockbreak.api.LootTable;
@@ -36,8 +39,8 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 		super(new CraftBlock(((CraftWorld) initBlock.getWorld()).getHandle(), (BlockPosition) initBlock.getBlockPosition()) {
 
 			BlockActionContext main = modifiedBlocks.get(initBlock);
-			IBlockData data = (IBlockData) initBlock.getIBlockData();
-			Material type = data.getBukkitMaterial();
+			IBlockData data = (IBlockData) blockData.getIBlockData() == null ? CraftMagicNumbers.getBlock(blockData.getType()).m() : (IBlockData) blockData.getIBlockData();
+			Material type = blockData.getType();
 
 			@Override
 			public IBlockData getNMS() {
@@ -58,7 +61,9 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 			public void setType(Material type, boolean applyPhysics) {
 				this.type = type;
 				main.setType(type);
-				data = (IBlockData) main.getIBlockData();
+				data = (IBlockData) main.getIBlockData() == null ? CraftMagicNumbers.getBlock(type).m() : (IBlockData) main.getIBlockData();
+				if (applyPhysics)
+					main.doUpdatePhysics();
 			}
 
 			@Override
@@ -67,6 +72,8 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 				IBlockData nms = ((CraftBlockData) data).getState();
 				main.setIBlockData(nms);
 				this.data = nms;
+				if (applyPhysics)
+					main.doUpdatePhysics();
 			}
 
 			@Override
@@ -74,6 +81,21 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 				IBlockData nms = CraftMagicNumbers.getBlock(getType(), data);
 				main.setIBlockData(nms);
 				this.data = nms;
+			}
+
+			@Override
+			public Collection<ItemStack> getDrops() {
+				return main.getLoot();
+			}
+
+			@Override
+			public Collection<ItemStack> getDrops(ItemStack item) {
+				return main.getLoot();
+			}
+
+			@Override
+			public Collection<ItemStack> getDrops(ItemStack item, Entity entity) {
+				return main.getLoot();
 			}
 		}, player);
 		this.blockData = blockData;

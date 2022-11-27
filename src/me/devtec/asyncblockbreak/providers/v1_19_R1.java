@@ -32,7 +32,7 @@ import org.bukkit.inventory.ItemStack;
 import me.devtec.asyncblockbreak.Loader;
 import me.devtec.asyncblockbreak.api.LootTable;
 import me.devtec.asyncblockbreak.events.AsyncBlockBreakEvent;
-import me.devtec.asyncblockbreak.events.BlockBreakDropItemsEvent;
+import me.devtec.asyncblockbreak.events.AsyncBlockDropItemEvent;
 import me.devtec.asyncblockbreak.providers.math.ThreadAccessRandomSource;
 import me.devtec.asyncblockbreak.utils.BlockActionContext;
 import me.devtec.asyncblockbreak.utils.BlockDestroyHandler;
@@ -56,6 +56,7 @@ import net.minecraft.world.level.ChunkCoordIntPair;
 import net.minecraft.world.level.World;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DropExperienceBlock;
+import net.minecraft.world.level.block.ITileEntity;
 import net.minecraft.world.level.block.state.IBlockData;
 import net.minecraft.world.level.chunk.Chunk;
 import net.minecraft.world.level.entity.PersistentEntitySectionManager;
@@ -139,9 +140,12 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	 */
 	private void processBlockBreak(PacketPlayInBlockDig packet, Player player, EntityPlayer nmsPlayer, IBlockData iblockdata, BlockPosition blockPos, Position pos, boolean dropItems,
 			boolean instantlyBroken) {
-		AsyncBlockBreakEvent event = new AsyncBlockBreakEvent(pos, calculateChangedBlocks(pos, player), player, BukkitLoader.getNmsProvider().toMaterial(iblockdata), instantlyBroken,
-				BlockFace.valueOf(packet.c().name()));
-		event.setTileDrops(!Loader.DISABLE_TILE_DROPS);
+		AsyncBlockBreakEvent event = new AsyncBlockBreakEvent(pos, calculateChangedBlocks(pos, player), player,
+				BukkitLoader.getNmsProvider().toMaterial(iblockdata)
+						.setNBT(iblockdata.b() instanceof ITileEntity ? BukkitLoader.getNmsProvider().getNBTOfTile(pos.getNMSChunk(), pos.getBlockX(), pos.getBlockY(), pos.getBlockZ()) : null),
+				instantlyBroken, BlockFace.valueOf(packet.c().name()));
+		if (player.getGameMode() == GameMode.CREATIVE)
+			event.setTileDrops(!Loader.DISABLE_TILE_DROPS);
 		event.setDropItems(dropItems);
 
 		net.minecraft.world.item.ItemStack hand = nmsPlayer.fA().f();
@@ -215,7 +219,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	}
 
 	private void genExpsFromBlock(AsyncBlockBreakEvent event, EntityPlayer nmsPlayer, net.minecraft.world.item.ItemStack hand, IBlockData iblockdata) {
-		if (nmsPlayer.d(iblockdata) && (EnchantmentManager.a(Enchantments.v, hand) == 0)) { // no silktouch
+		if (nmsPlayer.d(iblockdata) && EnchantmentManager.a(Enchantments.v, hand) == 0) { // no silktouch
 			if (iblockdata.b() instanceof DropExperienceBlock expBlock)
 				event.setExpToDrop(1 + RANDOM_SOURCE.percentChance(5));
 			switch (iblockdata.getBukkitMaterial()) {
@@ -266,7 +270,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	public void breakBlock(Player player, Position pos, IBlockData iblockdata, EntityPlayer nmsPlayer, PacketPlayInBlockDig packet, AsyncBlockBreakEvent breakEvent,
 			net.minecraft.world.item.ItemStack itemInHand) {
 		LootTable loot = breakEvent.getLoot();
-		// Add loot from block to the LootTable
 
 		WorldServer worldServer = ((CraftWorld) pos.getWorld()).getHandle();
 		Set<Position> physics = new HashSet<>();
@@ -275,14 +278,17 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		for (Entry<Position, BlockActionContext> modifyBlock : breakEvent.getModifiedBlocks().entrySet()) {
 			if (modifyBlock.getValue().shouldUpdatePhysics())
 				physics.add(modifyBlock.getKey());
+			if (breakEvent.isDropItems() && modifyBlock.getValue().getLoot() != null)
+				for (ItemStack stack : modifyBlock.getValue().getLoot())
+					loot.add(stack);
+			if (breakEvent.isDropItems() && breakEvent.doTileDrops() && modifyBlock.getValue().getTileLoot() != null)
+				for (ItemStack stack : modifyBlock.getValue().getTileLoot())
+					loot.add(stack);
 			if (modifyBlock.getValue().isDestroy()) {
 				removeEntitiesFrom(modifyBlock.getKey(), worldServer, loot);
 				modifyBlock.getKey().setTypeAndUpdate(modifyBlock.getValue().getData(), false);
 				if (modifyBlock.getValue().isDripstone())
 					fallDripstone(worldServer, (BlockPosition) modifyBlock.getKey().getBlockPosition(), (IBlockData) modifyBlock.getValue().getIBlockData());
-				if (breakEvent.isDropItems())
-					for (ItemStack item : modifyBlock.getValue().loot)
-						loot.add(item);
 			} else if (modifyBlock.getValue().getIBlockData() != null || modifyBlock.getValue().getType() != null)
 				modifyBlock.getKey().setTypeAndUpdate(modifyBlock.getValue().getData(), false);
 		}
@@ -310,7 +316,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			MinecraftServer.getServer().execute(() -> {
 
 				// Do not call event if isn't registered any listener
-				if (BlockBreakDropItemsEvent.getHandlerList().getRegisteredListeners().length == 0) {
+				if (AsyncBlockDropItemEvent.getHandlerList().getRegisteredListeners().length == 0) {
 					if (!loot.getItems().isEmpty() && breakEvent.isDropItems())
 						for (ItemStack drop : loot.getItems())
 							player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
@@ -321,18 +327,17 @@ public class v1_19_R1 implements BlockDestroyHandler {
 						});
 					return;
 				}
-				if (!loot.getItems().isEmpty() && breakEvent.isDropItems()) {
-					BlockBreakDropItemsEvent event = new BlockBreakDropItemsEvent(breakEvent, loot);
-					Bukkit.getPluginManager().callEvent(event);
-					if (!event.isCancelled())
-						for (ItemStack drop : event.getLoot().getItems())
-							player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
+				AsyncBlockDropItemEvent event = new AsyncBlockDropItemEvent(breakEvent, dropLoc, loot, breakEvent.getExpToDrop());
+				Bukkit.getPluginManager().callEvent(event);
+				if (!event.isCancelled()) {
+					for (ItemStack drop : event.getLoot().getItems())
+						player.getWorld().dropItem(event.getLocation(), drop, breakEvent.getItemConsumer());
+					if (breakEvent.getExpToDrop() > 0)
+						player.getWorld().spawn(event.getLocation(), EntityType.EXPERIENCE_ORB.getEntityClass(), c -> {
+							ExperienceOrb orb = (ExperienceOrb) c;
+							orb.setExperience(breakEvent.getExpToDrop());
+						});
 				}
-				if (breakEvent.getExpToDrop() > 0)
-					player.getWorld().spawn(dropLoc, EntityType.EXPERIENCE_ORB.getEntityClass(), c -> {
-						ExperienceOrb orb = (ExperienceOrb) c;
-						orb.setExperience(breakEvent.getExpToDrop());
-					});
 			});
 	}
 
@@ -356,7 +361,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		return event.getDamage();
 	}
 
-	public static boolean genDamageChance(net.minecraft.world.item.ItemStack item, int level, ThreadAccessRandomSource random) {
+	private boolean genDamageChance(net.minecraft.world.item.ItemStack item, int level, ThreadAccessRandomSource random) {
 		if (item.c() instanceof net.minecraft.world.item.ItemArmor && random.floatChance() < 0.6F)
 			return false;
 		return random.percentChance(level + 1) > 0;

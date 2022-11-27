@@ -33,4 +33,8 @@ public class LootTable {
 	public void setItems(List<ItemStack> items) {
 		itemsToDrop = items;
 	}
+
+	public void clear() {
+		itemsToDrop.clear();
+	}
 }

@@ -2,6 +2,8 @@ package me.devtec.asyncblockbreak.utils;
 
 import java.util.List;
 
+import javax.annotation.Nullable;
+
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 
@@ -15,7 +17,8 @@ public class BlockActionContext {
 
 	private boolean isDripstone;
 	private boolean updatePhysics;
-	public List<ItemStack> loot;
+	private List<ItemStack> loot;
+	private List<ItemStack> tileloot;
 
 	private BlockActionContext(boolean destroy, Material newType) {
 		this.destroy = destroy;
@@ -78,6 +81,19 @@ public class BlockActionContext {
 
 	public Material getType() {
 		return newType;
+	}
+
+	public List<ItemStack> getLoot() {
+		return loot;
+	}
+
+	@Nullable
+	public List<ItemStack> getTileLoot() {
+		return tileloot;
+	}
+
+	public void setTileLoot(List<ItemStack> loot) {
+		tileloot = loot;
 	}
 
 	public void setType(Material type) {

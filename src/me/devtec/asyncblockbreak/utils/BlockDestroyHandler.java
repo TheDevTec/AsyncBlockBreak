@@ -6,8 +6,6 @@ import java.util.Map;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Player;
 
 import me.devtec.asyncblockbreak.Loader;
@@ -19,50 +17,8 @@ import me.devtec.theapi.bukkit.game.Position;
 public interface BlockDestroyHandler {
 
 	static Constructor<?> packetDisconnect = Ref.constructor(Ref.nms("network.protocol.game", "PacketPlayOutKickDisconnect"), Ref.nms("network.chat", "IChatBaseComponent"));
-	static BlockFace[] faces = { BlockFace.EAST, BlockFace.WEST, BlockFace.NORTH, BlockFace.SOUTH };
-	static BlockFace[] all_faces = { BlockFace.EAST, BlockFace.WEST, BlockFace.NORTH, BlockFace.SOUTH, BlockFace.DOWN, BlockFace.UP };
 
 	boolean handle(String player, Object packet);
-
-	default boolean isBed(Material material) {
-		return material.name().endsWith("_BED");
-	}
-
-	default boolean isDoubleBlock(Material material) {
-		return material == Material.TALL_GRASS || material == Material.TALL_SEAGRASS || material == Material.LARGE_FERN || material == Material.PEONY || material == Material.ROSE_BUSH
-				|| material == Material.LILAC || material == Material.SUNFLOWER || material.name().endsWith("_DOOR");
-	}
-
-	default boolean isSolid(Position add) {
-		return add.getBukkitType().isSolid();
-	}
-
-	default boolean isVine(Position add, Material bukkitMaterial) {
-		return add.getBukkitType() == bukkitMaterial;
-	}
-
-	default void removeBlock(Position clone, boolean water) {
-		if (water)
-			clone.setTypeAndUpdate(Material.WATER, false);
-		else
-			clone.setAirAndUpdate(false);
-	}
-
-	default void fixPlantIfType(Position pos, Material blockType) {
-		if (blockType == Material.KELP || blockType == Material.KELP_PLANT)
-			fixPlant(pos, -1, Material.KELP_PLANT, Material.KELP, Material.KELP);
-		else if (blockType == Material.TWISTING_VINES || blockType == Material.TWISTING_VINES_PLANT)
-			fixPlant(pos, -1, Material.TWISTING_VINES, Material.TWISTING_VINES_PLANT, Material.TWISTING_VINES);
-		else if (blockType == Material.WEEPING_VINES || blockType == Material.WEEPING_VINES_PLANT)
-			fixPlant(pos, 1, Material.WEEPING_VINES, Material.WEEPING_VINES_PLANT, Material.WEEPING_VINES);
-	}
-
-	default void fixPlant(Position pos, int jump, Material thisOne, Material orThisOne, Material replacement) {
-		Position clone2 = pos.clone().add(0, jump, 0);
-		Material type = clone2.getBukkitType();
-		if (type == thisOne || type == orThisOne)
-			clone2.setTypeAndUpdate(replacement, false);
-	}
 
 	default boolean isInvalid(Player player, Position pos) {
 		return !player.isOnline() || !player.isValid() || player.isDead() || player.getHealth() <= 0 || player.getGameMode() == GameMode.SPECTATOR || Loader.KICK_PLAYER

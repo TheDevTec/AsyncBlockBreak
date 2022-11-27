@@ -1,5 +1,6 @@
 package me.devtec.asyncblockbreak.events;
 
+import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Cancellable;
@@ -8,20 +9,32 @@ import org.bukkit.event.HandlerList;
 
 import me.devtec.asyncblockbreak.api.LootTable;
 
-public class BlockBreakDropItemsEvent extends Event implements Cancellable {
+public class AsyncBlockDropItemEvent extends Event implements Cancellable {
 	private static final HandlerList handlers = new HandlerList();
 
 	private AsyncBlockBreakEvent blockEvent;
-	private LootTable loots;
+	private Location location;
+	private LootTable loot;
+	private int expToDrop;
 	private boolean cancel;
 
-	public BlockBreakDropItemsEvent(AsyncBlockBreakEvent blockEvent, LootTable loots) {
+	public AsyncBlockDropItemEvent(AsyncBlockBreakEvent blockEvent, Location location, LootTable loot, int expToDrop) {
 		this.blockEvent = blockEvent;
-		this.loots = loots;
+		this.loot = loot;
+		this.location = location;
+		this.expToDrop = expToDrop;
 	}
 
 	public Block getBlock() {
 		return blockEvent.getBlock();
+	}
+
+	public Location getLocation() {
+		return location;
+	}
+
+	public void setLocation(Location loc) {
+		location = loc;
 	}
 
 	public Player getPlayer() {
@@ -33,7 +46,15 @@ public class BlockBreakDropItemsEvent extends Event implements Cancellable {
 	}
 
 	public LootTable getLoot() {
-		return loots;
+		return loot;
+	}
+
+	public int getExpToDrop() {
+		return expToDrop;
+	}
+
+	public void setExpToDrop(int expToDrop) {
+		this.expToDrop = expToDrop;
 	}
 
 	@Override

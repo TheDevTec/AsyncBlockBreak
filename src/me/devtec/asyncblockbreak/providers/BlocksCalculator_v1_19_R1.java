@@ -347,7 +347,8 @@ public class BlocksCalculator_v1_19_R1 {
 	}
 
 	private void fixPlantIfType(Map<Position, BlockActionContext> map, Position destroyed) {
-		switch (((IBlockData) destroyed.getIBlockData()).getBukkitMaterial()) {
+		IBlockData ib = (IBlockData) destroyed.getIBlockData();
+		switch (ib.getBukkitMaterial()) {
 		case TWISTING_VINES_PLANT:
 			map.put(destroyed, BlockActionContext.updateState(Material.TWISTING_VINES));
 			break;
@@ -1241,7 +1242,8 @@ public class BlocksCalculator_v1_19_R1 {
 			Position clone = destroyed.clone().add(face);
 			if (map.containsKey(clone))
 				continue;
-			Material type = clone.getBukkitType();
+			IBlockData iblockdata = (IBlockData) clone.getIBlockData();
+			Material type = iblockdata.getBukkitMaterial();
 			if (type == Material.NETHER_PORTAL) {
 				map.put(clone, BlockActionContext.destroy(Material.AIR, Collections.emptyList()));
 				removeAllSurroundingPortals(map, clone);
@@ -1335,16 +1337,20 @@ public class BlocksCalculator_v1_19_R1 {
 		if (container == null)
 			return;
 		if (container instanceof TileEntityLectern lectern) {
-			if (lectern.c() != null)
-				map.get(destroyed).loot.add(CraftItemStack.asBukkitCopy(lectern.c())); // add lectern book
+			if (lectern.c() != null) {
+				map.get(destroyed).setTileLoot(new ArrayList<>());
+				map.get(destroyed).getTileLoot().add(CraftItemStack.asBukkitCopy(lectern.c())); // add lectern book
+			}
 		} else if (container instanceof TileEntityShulkerBox shulker) {
-			map.get(destroyed).loot.clear(); // remove empty shulker box
+			map.get(destroyed).getLoot().clear(); // remove empty shulker box
 			ItemStack item = new ItemStack(IRegistry.Y.a(new MinecraftKey("minecraft:" + (shulker.j() == null ? "shulker_box" : shulker.j().name().toLowerCase() + "_shulker_box"))));
 			shulker.e(item);
-			map.get(destroyed).loot.add(CraftItemStack.asBukkitCopy(item)); // add filled shulker box
-		} else if (container instanceof TileEntityContainer tileChest)
-			for (ItemStack item : tileChest.getContents())
-				map.get(destroyed).loot.add(CraftItemStack.asBukkitCopy(item));
+			map.get(destroyed).getLoot().add(CraftItemStack.asBukkitCopy(item)); // add filled shulker box
+		} else if (container instanceof TileEntityContainer tileContainer) {
+			map.get(destroyed).setTileLoot(new ArrayList<>());
+			for (ItemStack item : tileContainer.getContents())
+				map.get(destroyed).getTileLoot().add(CraftItemStack.asBukkitCopy(item));
+		}
 	}
 
 	private void destroyChest(Map<Position, BlockActionContext> map, Player player, Position destroyed, IBlockData iblockdata) {
@@ -1353,42 +1359,50 @@ public class BlocksCalculator_v1_19_R1 {
 		BlockPropertyChestType chesttype = iblockdata.c(chestType);
 		if (chesttype == BlockPropertyChestType.c) {
 			destroyed = destroyed.clone();
-			switch (BlockFace.valueOf(iblockdata.c(direction).name())) {
-			case EAST:
-				destroyed.add(0, 0, -1);
-				break;
-			case NORTH:
-				destroyed.add(-1, 0, 0);
-				break;
-			case SOUTH:
-				destroyed.add(1, 0, 0);
-				break;
-			case WEST:
-				destroyed.add(0, 0, 1);
-				break;
-			default:
-				break;
+			if (iblockdata.b() instanceof BlockChest) {
+				switch (BlockFace.valueOf(iblockdata.c(direction).name())) {
+				case EAST:
+					destroyed.add(0, 0, -1);
+					break;
+				case NORTH:
+					destroyed.add(-1, 0, 0);
+					break;
+				case SOUTH:
+					destroyed.add(1, 0, 0);
+					break;
+				case WEST:
+					destroyed.add(0, 0, 1);
+					break;
+				default:
+					break;
+				}
+				IBlockData modified = (IBlockData) destroyed.getIBlockData();
+				if (modified.b() instanceof BlockChest)
+					map.put(destroyed, BlockActionContext.updateState(modified.a(chestType, BlockPropertyChestType.a)));
 			}
-			map.put(destroyed, BlockActionContext.updateState(((IBlockData) destroyed.getIBlockData()).a(chestType, BlockPropertyChestType.a)));
 		} else if (chesttype == BlockPropertyChestType.b) {
 			destroyed = destroyed.clone();
-			switch (BlockFace.valueOf(iblockdata.c(direction).name())) {
-			case EAST:
-				destroyed.add(0, 0, 1);
-				break;
-			case NORTH:
-				destroyed.add(1, 0, 0);
-				break;
-			case SOUTH:
-				destroyed.add(-1, 0, 0);
-				break;
-			case WEST:
-				destroyed.add(0, 0, -1);
-				break;
-			default:
-				break;
+			if (iblockdata.b() instanceof BlockChest) {
+				switch (BlockFace.valueOf(iblockdata.c(direction).name())) {
+				case EAST:
+					destroyed.add(0, 0, 1);
+					break;
+				case NORTH:
+					destroyed.add(1, 0, 0);
+					break;
+				case SOUTH:
+					destroyed.add(-1, 0, 0);
+					break;
+				case WEST:
+					destroyed.add(0, 0, -1);
+					break;
+				default:
+					break;
+				}
+				IBlockData modified = (IBlockData) destroyed.getIBlockData();
+				if (modified.b() instanceof BlockChest)
+					map.put(destroyed, BlockActionContext.updateState(modified.a(chestType, BlockPropertyChestType.a)));
 			}
-			map.put(destroyed, BlockActionContext.updateState(((IBlockData) destroyed.getIBlockData()).a(chestType, BlockPropertyChestType.a)));
 		}
 	}
 

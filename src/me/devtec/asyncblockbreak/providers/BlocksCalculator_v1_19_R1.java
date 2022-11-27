@@ -208,22 +208,31 @@ public class BlocksCalculator_v1_19_R1 {
 	private void checkAndModifyStairs(Map<Position, BlockActionContext> map, Position clone, BlockPropertyStairsShape shape, BlockFace dir) {
 		Position first = clone;
 		Position second = clone;
+
+		boolean opposite = false;
 		switch (shape) {
 		case b:
 		case c:
 			dir = dir.getOppositeFace();
+			opposite = true;
 		case d:
 		case e:
 			switch (dir) {
 			case EAST:
+				first = clone.clone().add(BlockFace.EAST);
+				second = clone.clone().add(BlockFace.SOUTH);
+				break;
 			case NORTH:
-				first = clone.clone().add(BlockFace.WEST);
+				first = clone.clone().add(BlockFace.EAST);
 				second = clone.clone().add(BlockFace.NORTH);
 				break;
 			case WEST:
+				second = clone.clone().add(BlockFace.WEST);
+				first = clone.clone().add(BlockFace.NORTH);
+				break;
 			case SOUTH:
-				first = clone.clone().add(BlockFace.EAST);
-				second = clone.clone().add(BlockFace.SOUTH);
+				second = clone.clone().add(BlockFace.WEST);
+				first = clone.clone().add(BlockFace.SOUTH);
 				break;
 			default:
 				break;
@@ -232,14 +241,14 @@ public class BlocksCalculator_v1_19_R1 {
 		case a:
 			switch (dir) {
 			case EAST:
-			case WEST:
-				first = clone.clone().add(BlockFace.NORTH);
+			case SOUTH:
+				first = clone.clone().add(BlockFace.EAST);
 				second = clone.clone().add(BlockFace.SOUTH);
 				break;
 			case NORTH:
-			case SOUTH:
-				first = clone.clone().add(BlockFace.EAST);
-				second = clone.clone().add(BlockFace.WEST);
+			case WEST:
+				first = clone.clone().add(BlockFace.SOUTH);
+				second = clone.clone().add(BlockFace.NORTH);
 				break;
 			default:
 				break;
@@ -247,57 +256,49 @@ public class BlocksCalculator_v1_19_R1 {
 			break;
 		}
 		IBlockData ib = (IBlockData) first.getIBlockData();
-		if (ib.b(stairsShape) && ib.c(stairsShape) != BlockPropertyStairsShape.a && shouldModifyStairs(clone, first, ib))
+		if (ib.b(stairsShape) && ib.c(stairsShape) != BlockPropertyStairsShape.a && opposite ? !shouldModifyStairs(clone, first, ib) : shouldModifyStairs(clone, first, ib))
 			map.put(first, BlockActionContext.updateState(ib.a(stairsShape, BlockPropertyStairsShape.a)));
 
 		ib = (IBlockData) second.getIBlockData();
-		if (ib.b(stairsShape) && ib.c(stairsShape) != BlockPropertyStairsShape.a && shouldModifyStairs(clone, second, ib))
+		if (ib.b(stairsShape) && ib.c(stairsShape) != BlockPropertyStairsShape.a && opposite ? !shouldModifyStairs(clone, first, ib) : shouldModifyStairs(clone, first, ib))
 			map.put(second, BlockActionContext.updateState(ib.a(stairsShape, BlockPropertyStairsShape.a)));
 	}
 
 	private boolean shouldModifyStairs(Position orig, Position clone, IBlockData iblockdata) {
-		Position first = clone;
-		Position second = clone;
-
-		BlockPropertyStairsShape shape = iblockdata.c(stairsShape);
 		BlockFace dir = BlockFace.valueOf(iblockdata.c(direction).name());
-		switch (shape) {
-		case b:
-		case c:
-			dir = dir.getOppositeFace();
-		case d:
-		case e:
-			switch (dir) {
-			case EAST:
-			case NORTH:
-				first = clone.clone().add(BlockFace.WEST);
-				second = clone.clone().add(BlockFace.NORTH);
-				break;
-			case WEST:
-			case SOUTH:
-				first = clone.clone().add(BlockFace.EAST);
-				second = clone.clone().add(BlockFace.SOUTH);
-				break;
-			default:
-				break;
-			}
-			break;
-		default:
-			break;
-		}
 
-		IBlockData ib = orig.equals(first) ? Blocks.a.m() : (IBlockData) first.getIBlockData();
+		Position east = clone.clone().add(BlockFace.EAST);
+		Position north = clone.clone().add(BlockFace.NORTH);
+		Position south = clone.clone().add(BlockFace.SOUTH);
+		Position west = clone.clone().add(BlockFace.WEST);
+
+		IBlockData ib;
+		ib = orig.equals(east) ? Blocks.a.m() : (IBlockData) east.getIBlockData();
 		if (ib.b() instanceof BlockStairs) {
 			BlockFace dir2 = BlockFace.valueOf(ib.c(direction).name());
-			if (dir == dir2 || dir2 == BlockFace.EAST && dir == BlockFace.NORTH || dir2 == BlockFace.NORTH && dir == BlockFace.SOUTH || dir2 == BlockFace.WEST && dir == BlockFace.EAST
-					|| dir2 == BlockFace.SOUTH && dir == BlockFace.WEST)
+			if (dir == dir2.getOppositeFace() || dir == BlockFace.EAST && dir2 == BlockFace.SOUTH || dir == BlockFace.NORTH && dir2 == BlockFace.EAST
+					|| dir == BlockFace.WEST && dir2 == BlockFace.NORTH || dir == BlockFace.SOUTH && dir2 == BlockFace.WEST)
 				return false;
 		}
-		ib = orig.equals(second) ? Blocks.a.m() : (IBlockData) second.getIBlockData();
+		ib = orig.equals(north) ? Blocks.a.m() : (IBlockData) north.getIBlockData();
 		if (ib.b() instanceof BlockStairs) {
 			BlockFace dir2 = BlockFace.valueOf(ib.c(direction).name());
-			if (dir == dir2 || dir2 == BlockFace.EAST && dir == BlockFace.NORTH || dir2 == BlockFace.NORTH && dir == BlockFace.SOUTH || dir2 == BlockFace.WEST && dir == BlockFace.EAST
-					|| dir2 == BlockFace.SOUTH && dir == BlockFace.WEST)
+			if (dir == dir2.getOppositeFace() || dir == BlockFace.EAST && dir2 == BlockFace.SOUTH || dir == BlockFace.NORTH && dir2 == BlockFace.EAST
+					|| dir == BlockFace.WEST && dir2 == BlockFace.NORTH || dir == BlockFace.SOUTH && dir2 == BlockFace.WEST)
+				return false;
+		}
+		ib = orig.equals(south) ? Blocks.a.m() : (IBlockData) south.getIBlockData();
+		if (ib.b() instanceof BlockStairs) {
+			BlockFace dir2 = BlockFace.valueOf(ib.c(direction).name());
+			if (dir == dir2.getOppositeFace() || dir == BlockFace.EAST && dir2 == BlockFace.SOUTH || dir == BlockFace.NORTH && dir2 == BlockFace.EAST
+					|| dir == BlockFace.WEST && dir2 == BlockFace.NORTH || dir == BlockFace.SOUTH && dir2 == BlockFace.WEST)
+				return false;
+		}
+		ib = orig.equals(west) ? Blocks.a.m() : (IBlockData) west.getIBlockData();
+		if (ib.b() instanceof BlockStairs) {
+			BlockFace dir2 = BlockFace.valueOf(ib.c(direction).name());
+			if (dir == dir2.getOppositeFace() || dir == BlockFace.EAST && dir2 == BlockFace.SOUTH || dir == BlockFace.NORTH && dir2 == BlockFace.EAST
+					|| dir == BlockFace.WEST && dir2 == BlockFace.NORTH || dir == BlockFace.SOUTH && dir2 == BlockFace.WEST)
 				return false;
 		}
 		return true;
@@ -1053,12 +1054,13 @@ public class BlocksCalculator_v1_19_R1 {
 	}
 
 	public List<org.bukkit.inventory.ItemStack> getDrops(ItemStack nms, Position pos, IBlockData iblockdata, org.bukkit.entity.Entity entity) {
-		if (isPreferredTool(iblockdata, nms)) {
+		if (nms == null || isPreferredTool(iblockdata, nms)) {
 			WorldServer world = ((CraftWorld) pos.getWorld()).getHandle();
 			BlockPosition position = (BlockPosition) pos.getBlockPosition();
 
 			List<org.bukkit.inventory.ItemStack> items = new ArrayList<>();
-			for (ItemStack drop : Block.a(iblockdata, world, position, ((Chunk) pos.getNMSChunk()).getTileEntityImmediately(position), entity == null ? null : ((CraftEntity) entity).getHandle(), nms))
+			for (ItemStack drop : Block.a(iblockdata, world, position, ((Chunk) pos.getNMSChunk()).getTileEntityImmediately(position), entity == null ? null : ((CraftEntity) entity).getHandle(),
+					nms == null ? ItemStack.b : nms))
 				items.add(CraftItemStack.asBukkitCopy(drop));
 			return items;
 		}

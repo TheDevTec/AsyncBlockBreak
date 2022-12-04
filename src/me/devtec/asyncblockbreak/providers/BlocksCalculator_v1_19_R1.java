@@ -15,6 +15,7 @@ import org.bukkit.entity.Player;
 
 import me.devtec.asyncblockbreak.Loader;
 import me.devtec.asyncblockbreak.api.LootTable;
+import me.devtec.asyncblockbreak.providers.math.ThreadAccessRandomSource;
 import me.devtec.asyncblockbreak.utils.BlockActionContext;
 import me.devtec.theapi.bukkit.game.Position;
 import net.minecraft.core.BlockPosition;
@@ -22,6 +23,8 @@ import net.minecraft.core.EnumDirection;
 import net.minecraft.core.IRegistry;
 import net.minecraft.resources.MinecraftKey;
 import net.minecraft.server.level.WorldServer;
+import net.minecraft.util.MathHelper;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.BlockBarrel;
@@ -53,6 +56,12 @@ import net.minecraft.world.level.block.state.properties.BlockPropertyWallHeight;
 import net.minecraft.world.level.block.state.properties.DripstoneThickness;
 import net.minecraft.world.level.block.state.properties.IBlockState;
 import net.minecraft.world.level.chunk.Chunk;
+import net.minecraft.world.level.levelgen.BitRandomSource;
+import net.minecraft.world.level.levelgen.LegacyRandomSource;
+import net.minecraft.world.level.levelgen.PositionalRandomFactory;
+import net.minecraft.world.level.storage.loot.LootTableInfo.Builder;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParameters;
+import net.minecraft.world.phys.Vec3D;
 
 public class BlocksCalculator_v1_19_R1 {
 	static IBlockState<EnumDirection> direction = BlockProperties.S;
@@ -83,6 +92,12 @@ public class BlocksCalculator_v1_19_R1 {
 	static IBlockState<Boolean> PISTON_ACTIVATED = BlockProperties.g;
 	static IBlockState<EnumDirection> DIRECTION = BlockProperties.Q;
 	static IBlockState<BlockPropertyTrackPosition> TRACK_SHAPE = BlockProperties.ag;
+
+	private RandomSource SINGLE_THREAD_RANDOM_SOURCE;
+
+	public BlocksCalculator_v1_19_R1(ThreadAccessRandomSource RANDOM_SOURCE) {
+		SINGLE_THREAD_RANDOM_SOURCE = new ThreadAccessServerRandomSource(RANDOM_SOURCE);
+	}
 
 	public Map<Position, BlockActionContext> calculateChangedBlocks(Position destroyed, Player player, ItemStack hand) {
 		Map<Position, BlockActionContext> map = new HashMap<>();
@@ -1032,8 +1047,9 @@ public class BlocksCalculator_v1_19_R1 {
 			BlockPosition position = (BlockPosition) pos.getBlockPosition();
 
 			List<org.bukkit.inventory.ItemStack> items = new ArrayList<>();
-			for (ItemStack drop : Block.a(iblockdata, world, position, ((Chunk) pos.getNMSChunk()).getTileEntityImmediately(position), entity == null ? null : ((CraftEntity) entity).getHandle(),
-					nms == null ? ItemStack.b : nms))
+			Builder loottableinfo_builder = new Builder(world).a(SINGLE_THREAD_RANDOM_SOURCE).a(LootContextParameters.f, Vec3D.a(position)).a(LootContextParameters.i, nms == null ? ItemStack.b : nms)
+					.b(LootContextParameters.a, entity == null ? null : ((CraftEntity) entity).getHandle()).b(LootContextParameters.h, ((Chunk) pos.getNMSChunk()).getTileEntityImmediately(position));
+			for (ItemStack drop : iblockdata.a(loottableinfo_builder))
 				items.add(CraftItemStack.asBukkitCopy(drop));
 			return items;
 		}
@@ -1484,7 +1500,7 @@ public class BlocksCalculator_v1_19_R1 {
 		if (iblockdata.b() instanceof BlockChorusFruit) {
 			boolean on = iblockdata.c(up);
 			if (on) {
-				map.put(clone, BlockActionContext.updateState(iblockdata.a(up, false)));
+				map.put(clone.clone(), BlockActionContext.updateState(iblockdata.a(up, false)));
 				return;
 			}
 		}
@@ -1494,7 +1510,7 @@ public class BlocksCalculator_v1_19_R1 {
 		if (iblockdata.b() instanceof BlockChorusFruit) {
 			boolean on = iblockdata.c(east);
 			if (on) {
-				map.put(clone, BlockActionContext.updateState(iblockdata.a(east, false)));
+				map.put(clone.clone(), BlockActionContext.updateState(iblockdata.a(east, false)));
 				return;
 			}
 		}
@@ -1504,7 +1520,7 @@ public class BlocksCalculator_v1_19_R1 {
 		if (iblockdata.b() instanceof BlockChorusFruit) {
 			boolean on = iblockdata.c(north);
 			if (on) {
-				map.put(clone, BlockActionContext.updateState(iblockdata.a(north, false)));
+				map.put(clone.clone(), BlockActionContext.updateState(iblockdata.a(north, false)));
 				return;
 			}
 		}
@@ -1514,7 +1530,7 @@ public class BlocksCalculator_v1_19_R1 {
 		if (iblockdata.b() instanceof BlockChorusFruit) {
 			boolean on = iblockdata.c(west);
 			if (on) {
-				map.put(clone, BlockActionContext.updateState(iblockdata.a(west, false)));
+				map.put(clone.clone(), BlockActionContext.updateState(iblockdata.a(west, false)));
 				return;
 			}
 		}
@@ -1524,7 +1540,65 @@ public class BlocksCalculator_v1_19_R1 {
 		if (iblockdata.b() instanceof BlockChorusFruit) {
 			boolean on = iblockdata.c(south);
 			if (on)
-				map.put(clone, BlockActionContext.updateState(iblockdata.a(south, false)));
+				map.put(clone.clone(), BlockActionContext.updateState(iblockdata.a(south, false)));
+		}
+	}
+
+	public static class ThreadAccessServerRandomSource implements BitRandomSource {
+		ThreadAccessRandomSource random;
+
+		public ThreadAccessServerRandomSource(ThreadAccessRandomSource random) {
+			this.random = random;
+		}
+
+		@Override
+		public RandomSource d() {
+			return new ThreadAccessServerRandomSource(random);
+		}
+
+		@Override
+		public PositionalRandomFactory e() {
+			return new PositionalRandomFactory() {
+				protected long a = g();
+
+				@Override
+				public RandomSource a(final int x, final int y, final int z) {
+					final long l = MathHelper.c(x, y, z);
+					final long m = l ^ a;
+					return new LegacyRandomSource(m);
+				}
+
+				@Override
+				public RandomSource a(final String seed) {
+					final int i = seed.hashCode();
+					return new LegacyRandomSource(i ^ a);
+				}
+
+				@Override
+				public void a(final StringBuilder info) {
+					info.append("ThreadAccessServerPositionalRandomFactory{").append(a).append("}");
+				}
+			};
+		}
+
+		@Override
+		public void b(long seed) {
+			random.setSeed(seed);
+		}
+
+		@Override
+		public int c(int bits) {
+			return random.percentChance(bits);
+		}
+
+		@Override
+		public double k() {
+			return random.nextDouble();
+		}
+
+		@Override
+		public float i() {
+			return random.floatChance();
 		}
 	}
 }

@@ -69,7 +69,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	private Field persistentEntitySectionManager = IS_PAPER ? null : Ref.field(Ref.nms("server.level", "WorldServer"), "P");
 
 	private ThreadAccessRandomSource RANDOM_SOURCE = new ThreadAccessRandomSource();
-	private BlocksCalculator_v1_19_R1 calculator = new BlocksCalculator_v1_19_R1();
+	private BlocksCalculator_v1_19_R1 calculator = new BlocksCalculator_v1_19_R1(RANDOM_SOURCE);
 
 	@Override
 	public Map<Position, BlockActionContext> calculateChangedBlocks(Position destroyed, Player player) {

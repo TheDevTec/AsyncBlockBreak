@@ -1,5 +1,6 @@
 package me.devtec.asyncblockbreak.providers;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -17,6 +18,7 @@ import me.devtec.asyncblockbreak.Loader;
 import me.devtec.asyncblockbreak.api.LootTable;
 import me.devtec.asyncblockbreak.providers.math.ThreadAccessRandomSource;
 import me.devtec.asyncblockbreak.utils.BlockActionContext;
+import me.devtec.shared.Ref;
 import me.devtec.theapi.bukkit.game.Position;
 import net.minecraft.core.BlockPosition;
 import net.minecraft.core.EnumDirection;
@@ -37,6 +39,9 @@ import net.minecraft.world.level.block.BlockHopper;
 import net.minecraft.world.level.block.BlockLeaves;
 import net.minecraft.world.level.block.BlockLectern;
 import net.minecraft.world.level.block.BlockStairs;
+import net.minecraft.world.level.block.BlockStem;
+import net.minecraft.world.level.block.BlockStemAttached;
+import net.minecraft.world.level.block.BlockStemmed;
 import net.minecraft.world.level.block.BlockTall;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.TileEntity;
@@ -92,6 +97,8 @@ public class BlocksCalculator_v1_19_R1 {
 	static IBlockState<Boolean> PISTON_ACTIVATED = BlockProperties.g;
 	static IBlockState<EnumDirection> DIRECTION = BlockProperties.Q;
 	static IBlockState<BlockPropertyTrackPosition> TRACK_SHAPE = BlockProperties.ag;
+
+	static Field stemmedField = Ref.field(BlockStemAttached.class, "d");
 
 	private RandomSource SINGLE_THREAD_RANDOM_SOURCE;
 
@@ -535,6 +542,11 @@ public class BlocksCalculator_v1_19_R1 {
 			material = iblockdata.getBukkitMaterial();
 			if (shouldSkip(material)) {
 				// ignored
+			} else if (iblockdata.b() instanceof BlockStemAttached) {
+				if (iblockdata.c(direction) == EnumDirection.valueOf(face.name()).g()) {
+					BlockStemmed stemmed = (BlockStemmed) Ref.get(iblockdata.b(), stemmedField);
+					map.put(cloned, BlockActionContext.updateState(stemmed.b().m().a(BlockStem.b, 7)));
+				}
 			} else if (isAmethyst(material) && iblockdata.c(DIRECTION) == EnumDirection.valueOf(face.name()))
 				map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 			else if (material == Material.SCULK_VEIN)

@@ -207,7 +207,8 @@ public class BlocksCalculator_v1_19_R1 {
 			if (isContainerTile(iblockdata.b()))
 				destroyContainerTile(map, player, destroyed, iblockdata);
 			destroyAround(map, player, destroyed, iblockdata);
-		}
+		} else if (isConnectableWallBlock(material))
+			destroyConnectableBlocks(map, player, destroyed, iblockdata);
 		if (material == Material.REDSTONE_WIRE) {
 			updateRedstoneWire(map, destroyed, iblockdata);
 			BlockActionContext existing = map.get(destroyed);
@@ -215,7 +216,7 @@ public class BlocksCalculator_v1_19_R1 {
 				existing.doUpdatePhysics();
 			else
 				map.put(destroyed, BlockActionContext.updatePhysics());
-		} else if (isConnectable(material) && !material.isSolid() && isWallBlock(material))
+		} else if (isConnectable(material) && !material.isSolid())
 			for (BlockFace faces : AXIS_FACES) {
 				Position cloned = destroyed.clone().add(faces);
 				iblockdata = getIBlockDataOrEmpty(map, cloned);
@@ -320,29 +321,67 @@ public class BlocksCalculator_v1_19_R1 {
 		return false;
 	}
 
+	private boolean isBanner(Material material) {
+		switch (material) {
+		case BLACK_BANNER:
+		case BLUE_BANNER:
+		case BROWN_BANNER:
+		case CYAN_BANNER:
+		case GRAY_BANNER:
+		case GREEN_BANNER:
+		case LIGHT_BLUE_BANNER:
+		case LIGHT_GRAY_BANNER:
+		case LIME_BANNER:
+		case MAGENTA_BANNER:
+		case YELLOW_BANNER:
+		case WHITE_BANNER:
+		case RED_BANNER:
+		case PURPLE_BANNER:
+		case PINK_BANNER:
+		case ORANGE_BANNER:
+			return true;
+		default:
+			break;
+		}
+		return false;
+	}
+
 	private boolean isWallBlock(Material material) {
+		if (isConnectableWallBlock(material))
+			return true;
 		switch (material) {
 		case WALL_TORCH:
-		case ACACIA_WALL_SIGN:
-		case BIRCH_WALL_SIGN:
-		case BLACK_WALL_BANNER:
-		case BLUE_WALL_BANNER:
 		case BRAIN_CORAL_WALL_FAN:
-		case BROWN_WALL_BANNER:
 		case BUBBLE_CORAL_WALL_FAN:
-		case CREEPER_WALL_HEAD:
-		case CRIMSON_WALL_SIGN:
-		case CYAN_WALL_BANNER:
-		case DARK_OAK_WALL_SIGN:
 		case DEAD_BRAIN_CORAL_WALL_FAN:
 		case DEAD_BUBBLE_CORAL_WALL_FAN:
 		case DEAD_FIRE_CORAL_WALL_FAN:
 		case DEAD_HORN_CORAL_WALL_FAN:
 		case DEAD_TUBE_CORAL_WALL_FAN:
 		case FIRE_CORAL_WALL_FAN:
+		case HORN_CORAL_WALL_FAN:
+		case REDSTONE_WALL_TORCH:
+		case SOUL_WALL_TORCH:
+		case TUBE_CORAL_WALL_FAN:
+			return true;
+		default:
+			break;
+		}
+		return false;
+	}
+
+	private boolean isConnectableWallBlock(Material material) {
+		switch (material) {
+		case ACACIA_WALL_SIGN:
+		case BIRCH_WALL_SIGN:
+		case BLACK_WALL_BANNER:
+		case BLUE_WALL_BANNER:
+		case BROWN_WALL_BANNER:
+		case CRIMSON_WALL_SIGN:
+		case CYAN_WALL_BANNER:
+		case DARK_OAK_WALL_SIGN:
 		case GRAY_WALL_BANNER:
 		case GREEN_WALL_BANNER:
-		case HORN_CORAL_WALL_FAN:
 		case JUNGLE_WALL_SIGN:
 		case LIGHT_BLUE_WALL_BANNER:
 		case LIGHT_GRAY_WALL_BANNER:
@@ -354,12 +393,9 @@ public class BlocksCalculator_v1_19_R1 {
 		case PINK_WALL_BANNER:
 		case PURPLE_WALL_BANNER:
 		case RED_WALL_BANNER:
-		case REDSTONE_WALL_TORCH:
-		case SOUL_WALL_TORCH:
 		case YELLOW_WALL_BANNER:
 		case WHITE_WALL_BANNER:
 		case WARPED_WALL_SIGN:
-		case TUBE_CORAL_WALL_FAN:
 		case SPRUCE_WALL_SIGN:
 			return true;
 		default:
@@ -382,6 +418,31 @@ public class BlocksCalculator_v1_19_R1 {
 			break;
 		default:
 			break;
+		}
+	}
+
+	private void destroyConnectableBlocks(Map<Position, BlockActionContext> map, Player player, Position destroyed, IBlockData iblockdata) {
+		Position cloned = destroyed.clone().add(0, 1, 0);
+		iblockdata = getIBlockDataOrEmpty(map, cloned);
+		Material material = iblockdata.getBukkitMaterial();
+		if (shouldSkip(material)) {
+			// ignored
+		} else if (isSign(material) || isBanner(material)) {
+			map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+			destroyConnectableBlocks(map, player, cloned, iblockdata);
+		}
+
+		// sides
+		for (BlockFace face : AXIS_FACES) {
+			cloned = destroyed.clone().add(face);
+			iblockdata = getIBlockDataOrEmpty(map, cloned);
+			material = iblockdata.getBukkitMaterial();
+			if (shouldSkip(material)) {
+				// ignored
+			} else if (isConnectableWallBlock(material) && BlockFace.valueOf(iblockdata.c(direction).name()) == face) {
+				map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+				destroyConnectableBlocks(map, player, cloned, iblockdata);
+			}
 		}
 	}
 
@@ -446,9 +507,11 @@ public class BlocksCalculator_v1_19_R1 {
 
 			if (isGrowingUp(material))
 				destroyGrowingUp(map, player, cloned, iblockdata);
-		} else if (!isHead(material) && material != Material.END_ROD && material != Material.COBWEB && (!material.isSolid() || isPressurePlate(material) || isSign(material)))
+		} else if (!isHead(material) && material != Material.END_ROD && material != Material.COBWEB && (!material.isSolid() || isPressurePlate(material) || isSign(material) || isBanner(material)))
 			if (!iblockdata.b(attach) && !isWallBlock(material) || iblockdata.b(attach) && iblockdata.c(attach) == BlockPropertyAttachPosition.a) {
 				map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+				if (isSign(material) || isBanner(material))
+					destroyConnectableBlocks(map, player, cloned, iblockdata);
 				if (material == Material.REDSTONE_WIRE)
 					updateRedstoneWire(map, cloned, iblockdata);
 			}
@@ -599,8 +662,11 @@ public class BlocksCalculator_v1_19_R1 {
 			else if (isVine(material))
 				destroyVine(map, player, cloned, iblockdata, false);
 			else if (!Loader.LADDER_WORKS_AS_VINE && material == Material.LADDER || isWallBlock(material) && BlockFace.valueOf(iblockdata.c(direction).name()) == face
-					|| iblockdata.b(attach) && iblockdata.c(attach) == BlockPropertyAttachPosition.b && BlockFace.valueOf(iblockdata.c(direction).name()) == face)
+					|| iblockdata.b(attach) && iblockdata.c(attach) == BlockPropertyAttachPosition.b && BlockFace.valueOf(iblockdata.c(direction).name()) == face) {
 				map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+				if (isWallBlock(material))
+					destroyConnectableBlocks(map, player, cloned, iblockdata);
+			}
 			if (isConnectable(material)) {
 				BlockActionContext existing = map.get(cloned);
 				if (existing != null)
@@ -1046,6 +1112,10 @@ public class BlocksCalculator_v1_19_R1 {
 		case PLAYER_WALL_HEAD:
 		case ZOMBIE_HEAD:
 		case ZOMBIE_WALL_HEAD:
+		case SKELETON_SKULL:
+		case SKELETON_WALL_SKULL:
+		case WITHER_SKELETON_SKULL:
+		case WITHER_SKELETON_WALL_SKULL:
 			return true;
 		default:
 			break;

@@ -10,6 +10,7 @@ import org.bukkit.craftbukkit.v1_19_R1.CraftWorld;
 import org.bukkit.craftbukkit.v1_19_R1.block.CraftBlock;
 import org.bukkit.craftbukkit.v1_19_R1.block.data.CraftBlockData;
 import org.bukkit.craftbukkit.v1_19_R1.util.CraftMagicNumbers;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.block.BlockBreakEvent;
@@ -95,7 +96,7 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 			}
 
 			@Override
-			public Collection<ItemStack> getDrops(ItemStack item, org.bukkit.entity.Entity entity) {
+			public Collection<ItemStack> getDrops(ItemStack item, Entity entity) {
 				return result[0] == 1 ? super.getDrops(item, entity) : main.getLoot();
 			}
 		}, player);

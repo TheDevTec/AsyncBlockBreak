@@ -10,7 +10,6 @@ import org.bukkit.craftbukkit.v1_19_R1.CraftWorld;
 import org.bukkit.craftbukkit.v1_19_R1.block.CraftBlock;
 import org.bukkit.craftbukkit.v1_19_R1.block.data.CraftBlockData;
 import org.bukkit.craftbukkit.v1_19_R1.util.CraftMagicNumbers;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.block.BlockBreakEvent;
@@ -34,8 +33,8 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 	private Position pos;
 	private Map<Position, BlockActionContext> modifiedBlocks;
 
-	public AsyncBlockBreakEvent(Position initBlock, Map<Position, BlockActionContext> modifiedBlocks, Player player, BlockDataStorage blockData, boolean instantlyBroken, BlockFace face) {
-
+	public AsyncBlockBreakEvent(Integer[] result, Position initBlock, Map<Position, BlockActionContext> modifiedBlocks, Player player, BlockDataStorage blockData, boolean instantlyBroken,
+			BlockFace face) {
 		super(new CraftBlock(((CraftWorld) initBlock.getWorld()).getHandle(), (BlockPosition) initBlock.getBlockPosition()) {
 
 			BlockActionContext main = modifiedBlocks.get(initBlock);
@@ -44,21 +43,25 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 
 			@Override
 			public IBlockData getNMS() {
-				return data;
+				return result[0] == 1 ? getCraftWorld().getHandle().a_(getPosition()) : data;
 			}
 
 			@Override
 			public byte getData() {
-				return CraftMagicNumbers.toLegacyData(data);
+				return CraftMagicNumbers.toLegacyData(getNMS());
 			}
 
 			@Override
 			public Material getType() {
-				return type;
+				return result[0] == 1 ? getCraftWorld().getHandle().a_(getPosition()).getBukkitMaterial() : type;
 			}
 
 			@Override
 			public void setType(Material type, boolean applyPhysics) {
+				if (result[0] == 1) {
+					this.setBlockData(type.createBlockData(), applyPhysics);
+					return;
+				}
 				this.type = type;
 				main.setType(type);
 				data = (IBlockData) main.getIBlockData() == null ? CraftMagicNumbers.getBlock(type).m() : (IBlockData) main.getIBlockData();
@@ -68,6 +71,10 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 
 			@Override
 			public void setBlockData(BlockData data, boolean applyPhysics) {
+				if (result[0] == 1) {
+					CraftBlock.setTypeAndData(getCraftWorld().getHandle(), getPosition(), getNMS(), ((CraftBlockData) data).getState(), applyPhysics);
+					return;
+				}
 				type = data.getMaterial();
 				IBlockData nms = ((CraftBlockData) data).getState();
 				main.setIBlockData(nms);
@@ -78,24 +85,18 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 
 			@Override
 			public void setData(byte data, boolean applyPhysics) {
+				if (result[0] == 1) {
+					getCraftWorld().getHandle().a(getPosition(), CraftMagicNumbers.getBlock(getType(), data), applyPhysics ? 3 : 2);
+					return;
+				}
 				IBlockData nms = CraftMagicNumbers.getBlock(getType(), data);
 				main.setIBlockData(nms);
 				this.data = nms;
 			}
 
 			@Override
-			public Collection<ItemStack> getDrops() {
-				return main.getLoot();
-			}
-
-			@Override
-			public Collection<ItemStack> getDrops(ItemStack item) {
-				return main.getLoot();
-			}
-
-			@Override
-			public Collection<ItemStack> getDrops(ItemStack item, Entity entity) {
-				return main.getLoot();
+			public Collection<ItemStack> getDrops(ItemStack item, org.bukkit.entity.Entity entity) {
+				return result[0] == 1 ? super.getDrops(item, entity) : main.getLoot();
 			}
 		}, player);
 		this.blockData = blockData;

@@ -148,8 +148,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			event.setTileDrops(!Loader.DISABLE_TILE_DROPS);
 		event.setDropItems(dropItems);
 
-		net.minecraft.world.item.ItemStack hand = nmsPlayer.fA().f();
-
 		if (instantlyBroken) {
 			PlayerInteractEvent interactEvent = new PlayerInteractEvent(player, Action.LEFT_CLICK_BLOCK, player.getItemInHand(), pos.getBlock(), event.getBlockFace());
 			if (PlayerInteractEvent.getHandlerList().getRegisteredListeners().length > 0) {
@@ -160,6 +158,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 							sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
 							return;
 						}
+
+						net.minecraft.world.item.ItemStack hand = nmsPlayer.fA().f();
 						// Drop exp only in survival / adventure gamemode
 						if (player.getGameMode() == GameMode.ADVENTURE || player.getGameMode() == GameMode.SURVIVAL)
 							genExpsFromBlock(event, nmsPlayer, hand, iblockdata);
@@ -188,6 +188,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			}
 		}
 
+		net.minecraft.world.item.ItemStack hand = nmsPlayer.fA().f();
+
 		// Drop exp only in survival / adventure gamemode
 		if (player.getGameMode() == GameMode.ADVENTURE || player.getGameMode() == GameMode.SURVIVAL)
 			genExpsFromBlock(event, nmsPlayer, hand, iblockdata);
@@ -196,6 +198,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		if (BlockExpEvent.getHandlerList().getRegisteredListeners().length == 0) {
 			Ref.set(event, async, true);
 			breakBlock(player, pos, iblockdata, nmsPlayer, packet, event, hand);
+			return;
 		}
 
 		if (Loader.SYNC_EVENT)

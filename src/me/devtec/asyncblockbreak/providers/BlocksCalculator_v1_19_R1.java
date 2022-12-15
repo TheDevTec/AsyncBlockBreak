@@ -1164,7 +1164,7 @@ public class BlocksCalculator_v1_19_R1 {
 	}
 
 	private void destroyGrowingUp(Map<Position, BlockActionContext> map, Player player, Position destroyed, IBlockData iblockdata) {
-		map.put(destroyed, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, destroyed, iblockdata, player)));
+		map.put(destroyed, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, destroyed, iblockdata, player)));
 
 		destroyed = destroyed.clone();
 		destroyed.setY(destroyed.getY() + 1);

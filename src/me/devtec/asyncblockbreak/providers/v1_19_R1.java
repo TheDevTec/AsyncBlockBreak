@@ -29,6 +29,8 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemDamageEvent;
 import org.bukkit.inventory.ItemStack;
 
+import com.destroystokyo.paper.antixray.ChunkPacketBlockControllerAntiXray;
+
 import me.devtec.asyncblockbreak.Loader;
 import me.devtec.asyncblockbreak.api.LootTable;
 import me.devtec.asyncblockbreak.events.AsyncBlockBreakEvent;
@@ -277,6 +279,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		LootTable loot = breakEvent.getLoot();
 
 		WorldServer worldServer = ((CraftWorld) pos.getWorld()).getHandle();
+		boolean ANTI_XRAY = IS_PAPER ? worldServer.chunkPacketBlockController instanceof ChunkPacketBlockControllerAntiXray : false;
 		Set<Position> physics = new HashSet<>();
 		physics.add(pos);
 
@@ -290,6 +293,9 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				for (ItemStack stack : modifyBlock.getValue().getTileLoot())
 					loot.add(stack);
 			if (modifyBlock.getValue().isDestroy()) {
+				if (ANTI_XRAY)
+					worldServer.chunkPacketBlockController.onBlockChange(worldServer, (BlockPosition) modifyBlock.getKey().getBlockPosition(), Blocks.a.m(),
+							(IBlockData) modifyBlock.getValue().getDestroyedIBlockData(), 2, 2);
 				removeEntitiesFrom(modifyBlock.getKey(), worldServer, loot);
 				modifyBlock.getKey().setTypeAndUpdate(modifyBlock.getValue().getData(), false);
 				if (modifyBlock.getValue().isDripstone())

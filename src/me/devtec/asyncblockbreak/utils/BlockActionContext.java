@@ -14,6 +14,7 @@ public class BlockActionContext {
 	private boolean destroy;
 	private Material newType;
 	private Object iblockdata;
+	private Object destroyedIblockdata;
 
 	private boolean isDripstone;
 	private boolean updatePhysics;
@@ -25,9 +26,10 @@ public class BlockActionContext {
 		this.newType = newType;
 	}
 
-	public static BlockActionContext destroy(Material newType, List<ItemStack> loot) {
+	public static BlockActionContext destroy(Object destroyed, Material newType, List<ItemStack> loot) {
 		BlockActionContext action = new BlockActionContext(true, newType);
 		action.loot = loot;
+		action.destroyedIblockdata = destroyed;
 		return action;
 	}
 
@@ -65,6 +67,14 @@ public class BlockActionContext {
 
 	public Object getIBlockData() {
 		return iblockdata;
+	}
+
+	/**
+	 * @apiNote Used only for PaperSpigot AntiXRay
+	 * @return IBlockData
+	 */
+	public Object getDestroyedIBlockData() {
+		return destroyedIblockdata;
 	}
 
 	public boolean isDestroy() {

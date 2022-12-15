@@ -22,6 +22,7 @@ import me.devtec.shared.Ref;
 import me.devtec.theapi.bukkit.game.Position;
 import net.minecraft.core.BlockPosition;
 import net.minecraft.core.EnumDirection;
+import net.minecraft.core.EnumDirection.EnumAxis;
 import net.minecraft.core.IRegistry;
 import net.minecraft.resources.MinecraftKey;
 import net.minecraft.server.level.WorldServer;
@@ -73,6 +74,7 @@ public class BlocksCalculator_v1_19_R1 {
 	static IBlockState<BlockPropertyBedPart> bedpart = BlockProperties.bc;
 	static IBlockState<BlockPropertyDoubleBlockHalf> doubleHalf = BlockProperties.ae;
 	static IBlockState<BlockPropertyChestType> chestType = BlockProperties.bd;
+	static IBlockState<EnumAxis> axis = BlockProperties.I;
 	// vines
 	static IBlockState<Boolean> east = BlockProperties.N, north = BlockProperties.M, south = BlockProperties.O, west = BlockProperties.P, up = BlockProperties.K, down = BlockProperties.L;
 	static IBlockState<Boolean> waterlogged = BlockProperties.C;
@@ -110,7 +112,7 @@ public class BlocksCalculator_v1_19_R1 {
 		Map<Position, BlockActionContext> map = new HashMap<>();
 		IBlockData iblockdata = (IBlockData) destroyed.getIBlockData();
 
-		map.put(destroyed, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(hand, destroyed, iblockdata, player)));
+		map.put(destroyed, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(hand, destroyed, iblockdata, player)));
 
 		Material material = iblockdata.getBukkitMaterial();
 		if (iblockdata.b() instanceof BlockStairs)
@@ -137,7 +139,7 @@ public class BlocksCalculator_v1_19_R1 {
 			material = iblockdata.getBukkitMaterial();
 			while (material == Material.POINTED_DRIPSTONE && iblockdata.c(vertical_direction) == dir) {
 				if (!pointingDown)
-					map.put(destroyed, BlockActionContext.destroy(Material.AIR, Collections.emptyList()));
+					map.put(destroyed, BlockActionContext.destroy(iblockdata, Material.AIR, Collections.emptyList()));
 				else
 					map.put(destroyed, BlockActionContext.destroyDripstone(iblockdata));
 				destroyed = destroyed.clone().add(0, pointingDown ? -1 : 1, 0);
@@ -428,7 +430,7 @@ public class BlocksCalculator_v1_19_R1 {
 		if (shouldSkip(material)) {
 			// ignored
 		} else if (isSign(material) || isBanner(material)) {
-			map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+			map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 			destroyConnectableBlocks(map, player, cloned, iblockdata);
 		}
 
@@ -440,7 +442,7 @@ public class BlocksCalculator_v1_19_R1 {
 			if (shouldSkip(material)) {
 				// ignored
 			} else if (isConnectableWallBlock(material) && BlockFace.valueOf(iblockdata.c(direction).name()) == face) {
-				map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+				map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 				destroyConnectableBlocks(map, player, cloned, iblockdata);
 			}
 		}
@@ -454,10 +456,10 @@ public class BlocksCalculator_v1_19_R1 {
 		if (shouldSkip(material)) {
 			// ignored
 		} else if (isAmethyst(material) && iblockdata.c(DIRECTION) == EnumDirection.b)
-			map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+			map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 		else if (material == Material.SCULK_VEIN) {
 			if (!iblockdata.c(east) && !iblockdata.c(north) && !iblockdata.c(south) && !iblockdata.c(west) && !iblockdata.c(up))
-				map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+				map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 			else
 				map.put(cloned, BlockActionContext.updateState(iblockdata.a(down, false)));
 		} else if (material == Material.RAIL)
@@ -474,7 +476,7 @@ public class BlocksCalculator_v1_19_R1 {
 		} else if (material == Material.POINTED_DRIPSTONE) {
 			fixDripstoneThickness(map, player, cloned.clone(), false);
 			while (material == Material.POINTED_DRIPSTONE && iblockdata.c(vertical_direction) == EnumDirection.b) { // up
-				map.put(cloned, BlockActionContext.destroy(Material.AIR, Collections.emptyList()));
+				map.put(cloned, BlockActionContext.destroy(iblockdata, Material.AIR, Collections.emptyList()));
 				cloned = cloned.clone().add(0, 1, 0);
 				iblockdata = getIBlockDataOrEmpty(map, cloned);
 				material = iblockdata.getBukkitMaterial();
@@ -482,23 +484,23 @@ public class BlocksCalculator_v1_19_R1 {
 			if (material == Material.POINTED_DRIPSTONE && iblockdata.c(thickness) == DripstoneThickness.a) // tip_merge
 				map.put(cloned, BlockActionContext.updateState(iblockdata.a(thickness, DripstoneThickness.b).a(vertical_direction, EnumDirection.a))); // tip
 		} else if (isDoubleBlock(material)) {
-			map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+			map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 			destroyDoubleBlock(map, player, cloned, iblockdata);
 		} else if (isBed(material)) {
-			map.put(cloned, BlockActionContext.destroy(Material.AIR, getDrops(null, cloned, iblockdata, player)));
+			map.put(cloned, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, cloned, iblockdata, player)));
 			destroyBed(map, player, cloned, iblockdata);
 		} else if (material == Material.NETHER_PORTAL) {
-			map.put(cloned, BlockActionContext.destroy(Material.AIR, Collections.emptyList()));
+			map.put(cloned, BlockActionContext.destroy(iblockdata, Material.AIR, Collections.emptyList()));
 			removeAllSurroundingPortals(map, cloned);
 		} else if (material == Material.CHORUS_FLOWER || material == Material.POPPED_CHORUS_FRUIT)
-			map.put(cloned, BlockActionContext.destroy(Material.AIR, getDrops(null, cloned, iblockdata, player)));
+			map.put(cloned, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, cloned, iblockdata, player)));
 		else if (material == Material.CHORUS_PLANT) {
-			map.put(cloned, BlockActionContext.destroy(Material.AIR, getDrops(null, cloned, iblockdata, player)));
+			map.put(cloned, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, cloned, iblockdata, player)));
 			destroyChorusInit(map, player, cloned, iblockdata);
 		} else if (isGrowingUp(material)) {
 			fixPlantIfType(map, cloned.clone().add(0, -1, 0));
 
-			map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+			map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 			cloned = cloned.clone();
 			cloned.setY(cloned.getY() + 1);
 
@@ -509,7 +511,7 @@ public class BlocksCalculator_v1_19_R1 {
 				destroyGrowingUp(map, player, cloned, iblockdata);
 		} else if (!isHead(material) && material != Material.END_ROD && material != Material.COBWEB && (!material.isSolid() || isPressurePlate(material) || isSign(material) || isBanner(material)))
 			if (!iblockdata.b(attach) && !isWallBlock(material) || iblockdata.b(attach) && iblockdata.c(attach) == BlockPropertyAttachPosition.a) {
-				map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+				map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 				if (isSign(material) || isBanner(material))
 					destroyConnectableBlocks(map, player, cloned, iblockdata);
 				if (material == Material.REDSTONE_WIRE)
@@ -540,10 +542,10 @@ public class BlocksCalculator_v1_19_R1 {
 		if (shouldSkip(material)) {
 			// ignored
 		} else if (isAmethyst(material) && iblockdata.c(DIRECTION) == EnumDirection.a)
-			map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+			map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 		else if (material == Material.SCULK_VEIN) {
 			if (!iblockdata.c(east) && !iblockdata.c(north) && !iblockdata.c(south) && !iblockdata.c(west) && !iblockdata.c(down))
-				map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+				map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 			else
 				map.put(cloned, BlockActionContext.updateState(iblockdata.a(up, false)));
 		} else if (iblockdata.b() instanceof BlockCobbleWall)
@@ -562,14 +564,14 @@ public class BlocksCalculator_v1_19_R1 {
 			if (material == Material.POINTED_DRIPSTONE && iblockdata.c(thickness) == DripstoneThickness.a) // tip_merge
 				map.put(cloned, BlockActionContext.updateState(iblockdata.a(thickness, DripstoneThickness.b).a(vertical_direction, EnumDirection.b))); // tip
 		} else if (material == Material.NETHER_PORTAL) {
-			map.put(cloned, BlockActionContext.destroy(Material.AIR, getDrops(null, cloned, iblockdata, player)));
+			map.put(cloned, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, cloned, iblockdata, player)));
 			removeAllSurroundingPortals(map, cloned);
 		} else if (isVine(material))
 			destroyVine(map, player, cloned, iblockdata, false);
 		else if (isWeepingVines(material)) {
 			fixPlantIfType(map, cloned.clone().add(0, 1, 0));
 
-			map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+			map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 			cloned = cloned.clone();
 			cloned.setY(cloned.getY() - 1);
 
@@ -579,7 +581,7 @@ public class BlocksCalculator_v1_19_R1 {
 			if (isWeepingVines(material))
 				destroyWeepingVines(map, player, cloned, iblockdata);
 		} else if (material == Material.SPORE_BLOSSOM || material == Material.HANGING_ROOTS || iblockdata.b(attach) && iblockdata.c(attach) == BlockPropertyAttachPosition.c)
-			map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+			map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 		if (isConnectable(material)) {
 			BlockActionContext existing = map.get(cloned);
 			if (existing != null)
@@ -611,36 +613,39 @@ public class BlocksCalculator_v1_19_R1 {
 					map.put(cloned, BlockActionContext.updateState(stemmed.b().m().a(BlockStem.b, 7)));
 				}
 			} else if (isAmethyst(material) && iblockdata.c(DIRECTION) == EnumDirection.valueOf(face.name()))
-				map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+				map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 			else if (material == Material.SCULK_VEIN)
 				switch (face) {
 				case EAST:
 					if (!iblockdata.c(down) && !iblockdata.c(north) && !iblockdata.c(south) && !iblockdata.c(east) && !iblockdata.c(up))
-						map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+						map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 					else
 						map.put(cloned, BlockActionContext.updateState(iblockdata.a(west, false)));
 					break;
 				case NORTH:
 					if (!iblockdata.c(down) && !iblockdata.c(west) && !iblockdata.c(north) && !iblockdata.c(east) && !iblockdata.c(up))
-						map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+						map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 					else
 						map.put(cloned, BlockActionContext.updateState(iblockdata.a(south, false)));
 					break;
 				case SOUTH:
 					if (!iblockdata.c(down) && !iblockdata.c(west) && !iblockdata.c(south) && !iblockdata.c(east) && !iblockdata.c(up))
-						map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+						map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 					else
 						map.put(cloned, BlockActionContext.updateState(iblockdata.a(north, false)));
 					break;
 				case WEST:
 					if (!iblockdata.c(down) && !iblockdata.c(north) && !iblockdata.c(south) && !iblockdata.c(west) && !iblockdata.c(up))
-						map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+						map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 					else
 						map.put(cloned, BlockActionContext.updateState(iblockdata.a(east, false)));
 					break;
 				default:
 					break;
 				}
+			else if (material == Material.NETHER_PORTAL && (iblockdata.c(axis) == EnumAxis.a && (face == BlockFace.EAST || face == BlockFace.WEST)
+					|| iblockdata.c(axis) == EnumAxis.c && (face == BlockFace.NORTH || face == BlockFace.SOUTH)))
+				removeAllSurroundingPortals(map, cloned);
 			else if (iblockdata.b() instanceof BlockTall) {
 				int stateId = 0;
 				for (IBlockState<Boolean> state : BLOCK_ROTATIONS) {
@@ -663,7 +668,7 @@ public class BlocksCalculator_v1_19_R1 {
 				destroyVine(map, player, cloned, iblockdata, false);
 			else if (!Loader.LADDER_WORKS_AS_VINE && material == Material.LADDER || isWallBlock(material) && BlockFace.valueOf(iblockdata.c(direction).name()) == face
 					|| iblockdata.b(attach) && iblockdata.c(attach) == BlockPropertyAttachPosition.b && BlockFace.valueOf(iblockdata.c(direction).name()) == face) {
-				map.put(cloned, BlockActionContext.destroy(isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+				map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 				if (isWallBlock(material))
 					destroyConnectableBlocks(map, player, cloned, iblockdata);
 			}
@@ -1073,11 +1078,11 @@ public class BlocksCalculator_v1_19_R1 {
 		if (iblockdata.getBukkitMaterial() == Material.PISTON_HEAD) {
 			BlockFace face = BlockFace.valueOf(iblockdata.c(DIRECTION).name()).getOppositeFace();
 			cloned = cloned.clone().add(face);
-			map.put(cloned, BlockActionContext.destroy(Material.AIR, getDrops(null, cloned, (IBlockData) cloned.getIBlockData(), player)));
+			map.put(cloned, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, cloned, (IBlockData) cloned.getIBlockData(), player)));
 		} else if (iblockdata.c(PISTON_ACTIVATED)) {
 			BlockFace face = BlockFace.valueOf(iblockdata.c(DIRECTION).name());
 			cloned = cloned.clone().add(face);
-			map.put(cloned, BlockActionContext.destroy(Material.AIR, Collections.emptyList()));
+			map.put(cloned, BlockActionContext.destroy(iblockdata, Material.AIR, Collections.emptyList()));
 		}
 	}
 
@@ -1159,7 +1164,7 @@ public class BlocksCalculator_v1_19_R1 {
 	}
 
 	private void destroyGrowingUp(Map<Position, BlockActionContext> map, Player player, Position destroyed, IBlockData iblockdata) {
-		map.put(destroyed, BlockActionContext.destroy(Material.AIR, getDrops(null, destroyed, iblockdata, player)));
+		map.put(destroyed, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, destroyed, iblockdata, player)));
 
 		destroyed = destroyed.clone();
 		destroyed.setY(destroyed.getY() + 1);
@@ -1171,7 +1176,7 @@ public class BlocksCalculator_v1_19_R1 {
 	}
 
 	private void destroyWeepingVines(Map<Position, BlockActionContext> map, Player player, Position destroyed, IBlockData iblockdata) {
-		map.put(destroyed, BlockActionContext.destroy(Material.AIR, getDrops(null, destroyed, iblockdata, player)));
+		map.put(destroyed, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, destroyed, iblockdata, player)));
 
 		destroyed = destroyed.clone();
 		destroyed.setY(destroyed.getY() - 1);
@@ -1221,7 +1226,7 @@ public class BlocksCalculator_v1_19_R1 {
 			return;
 		}
 
-		map.put(destroyed, BlockActionContext.destroy(Material.AIR, getDrops(null, destroyed, iblockdata, player)));
+		map.put(destroyed, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, destroyed, iblockdata, player)));
 
 		destroyed = destroyed.clone();
 		destroyed = destroyed.setY(destroyed.getY() - 1);
@@ -1314,7 +1319,7 @@ public class BlocksCalculator_v1_19_R1 {
 		if (blockBehindOrAboveLadder(map, destroyed, iblockdata, !first))
 			return;
 
-		map.put(destroyed, BlockActionContext.destroy(Material.AIR, getDrops(null, destroyed, iblockdata, player)));
+		map.put(destroyed, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, destroyed, iblockdata, player)));
 
 		destroyed = destroyed.clone();
 		destroyed = destroyed.setY(destroyed.getY() - 1);
@@ -1343,7 +1348,7 @@ public class BlocksCalculator_v1_19_R1 {
 			IBlockData iblockdata = (IBlockData) clone.getIBlockData();
 			Material type = iblockdata.getBukkitMaterial();
 			if (type == Material.NETHER_PORTAL) {
-				map.put(clone, BlockActionContext.destroy(Material.AIR, Collections.emptyList()));
+				map.put(clone, BlockActionContext.destroy(iblockdata, Material.AIR, Collections.emptyList()));
 				removeAllSurroundingPortals(map, clone);
 			}
 		}
@@ -1378,9 +1383,9 @@ public class BlocksCalculator_v1_19_R1 {
 		Position cloned = destroyed.clone();
 		BlockFace face = BlockFace.valueOf(iblockdata.c(direction).name());
 		if (iblockdata.c(bedpart) == BlockPropertyBedPart.a)
-			map.put(cloned.add((face = face.getOppositeFace()).getModX(), 0, face.getModZ()), BlockActionContext.destroy(Material.AIR, Collections.emptyList()));
+			map.put(cloned.add((face = face.getOppositeFace()).getModX(), 0, face.getModZ()), BlockActionContext.destroy(iblockdata, Material.AIR, Collections.emptyList()));
 		else
-			map.put(cloned.add(face.getModX(), 0, face.getModZ()), BlockActionContext.destroy(Material.AIR, getDrops(null, cloned, (IBlockData) cloned.getIBlockData(), player)));
+			map.put(cloned.add(face.getModX(), 0, face.getModZ()), BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, cloned, (IBlockData) cloned.getIBlockData(), player)));
 	}
 
 	private boolean isDoubleBlock(Material material) {
@@ -1414,7 +1419,7 @@ public class BlocksCalculator_v1_19_R1 {
 			destroyed = destroyed.clone().add(0, 1, 0);
 		else
 			destroyed = destroyed.clone().add(0, -1, 0);
-		map.put(destroyed, BlockActionContext.destroy(isWaterlogged(iblockdata),
+		map.put(destroyed, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata),
 				iblockdata.c(doubleHalf) != BlockPropertyDoubleBlockHalf.b ? getDrops(null, destroyed, (IBlockData) destroyed.getIBlockData(), player) : Collections.emptyList()));
 	}
 
@@ -1541,13 +1546,13 @@ public class BlocksCalculator_v1_19_R1 {
 	private void destroyChorus(Map<Position, BlockActionContext> map, Player player, Position destroyed, int direction) {
 		IBlockData iblockdata = (IBlockData) destroyed.getIBlockData();
 		if (iblockdata.getBukkitMaterial() == Material.CHORUS_FLOWER || iblockdata.getBukkitMaterial() == Material.POPPED_CHORUS_FRUIT) {
-			map.put(destroyed, BlockActionContext.destroy(Material.AIR, getDrops(null, destroyed, iblockdata, player)));
+			map.put(destroyed, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, destroyed, iblockdata, player)));
 			return;
 		}
 		if (!(iblockdata.b() instanceof BlockChorusFruit))
 			return;
 
-		map.put(destroyed, BlockActionContext.destroy(Material.AIR, getDrops(null, destroyed, iblockdata, player)));
+		map.put(destroyed, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, destroyed, iblockdata, player)));
 
 		boolean onTop = iblockdata.c(up);
 		if (onTop) {

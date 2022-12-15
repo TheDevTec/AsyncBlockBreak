@@ -115,9 +115,10 @@ public class BlocksCalculator_v1_19_R1 {
 		map.put(destroyed, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(hand, destroyed, iblockdata, player)));
 
 		Material material = iblockdata.getBukkitMaterial();
-		if (iblockdata.b() instanceof BlockStairs)
+		if (iblockdata.b() instanceof BlockStairs) {
 			checkAndModifyStairs(map, destroyed);
-		else if (material == Material.RAIL)
+			destroyConnectableBlocks(map, player, destroyed, iblockdata);
+		} else if (material == Material.RAIL)
 			for (BlockFace faces : AXIS_FACES) {
 				Position cloned2 = destroyed.clone().add(faces);
 				iblockdata = getIBlockDataOrEmpty(map, cloned2);
@@ -151,11 +152,13 @@ public class BlocksCalculator_v1_19_R1 {
 					map.put(destroyed, BlockActionContext.updateState(iblockdata.a(thickness, DripstoneThickness.b).a(vertical_direction, EnumDirection.a))); // tip
 				else
 					map.put(destroyed, BlockActionContext.updateState(iblockdata.a(thickness, DripstoneThickness.b).a(vertical_direction, EnumDirection.b))); // tip
-		} else if (material == Material.PISTON || material == Material.STICKY_PISTON || material == Material.PISTON_HEAD)
+		} else if (material == Material.PISTON || material == Material.STICKY_PISTON || material == Material.PISTON_HEAD) {
 			destroyPiston(map, player, destroyed, iblockdata);
-		else if (isChest(material))
+			destroyConnectableBlocks(map, player, destroyed, iblockdata);
+		} else if (isChest(material)) {
 			destroyChest(map, player, destroyed, iblockdata);
-		else if (isDoubleBlock(material))
+			destroyConnectableBlocks(map, player, destroyed, iblockdata);
+		} else if (isDoubleBlock(material))
 			destroyDoubleBlock(map, player, destroyed, iblockdata);
 		else if (isBed(material))
 			destroyBed(map, player, destroyed, iblockdata);

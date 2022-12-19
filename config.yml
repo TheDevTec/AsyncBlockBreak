@@ -8,6 +8,9 @@ settings:
   # Should ladder works same as vines?
   # Look at: https://imgur.com/a/UGGnaRb
   ladder_works_as_vine: false
+  # Allow breaking blocks in creative mode with sword
+  # This is defaulty disabled in the vanilla
+  breaking_with_sword: false
 
 anticheat:
   # AntiCheat - Anti Nuke protection

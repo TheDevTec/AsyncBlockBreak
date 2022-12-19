@@ -52,6 +52,8 @@ import net.minecraft.server.level.WorldServer;
 import net.minecraft.world.EnumHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.EntityFallingBlock;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemSword;
 import net.minecraft.world.item.enchantment.EnchantmentManager;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.ChunkCoordIntPair;
@@ -67,11 +69,17 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	static Field async = Ref.field(Event.class, "async");
 	static IBlockData AIR = Blocks.a.m();
 
-	private boolean IS_PAPER = Ref.getClass("io.papermc.paper.chunk.system.scheduling.NewChunkHolder") != null;
-	private Field persistentEntitySectionManager = IS_PAPER ? null : Ref.field(Ref.nms("server.level", "WorldServer"), "P");
+	private boolean IS_PAPER;
+	private Field persistentEntitySectionManager;
+	private ThreadAccessRandomSource RANDOM_SOURCE;
+	private BlocksCalculator_v1_19_R1 calculator;
 
-	private ThreadAccessRandomSource RANDOM_SOURCE = new ThreadAccessRandomSource();
-	private BlocksCalculator_v1_19_R1 calculator = new BlocksCalculator_v1_19_R1(RANDOM_SOURCE);
+	public v1_19_R1() {
+		IS_PAPER = Ref.getClass("io.papermc.paper.chunk.system.scheduling.NewChunkHolder") != null;
+		persistentEntitySectionManager = IS_PAPER ? null : Ref.field(Ref.nms("server.level", "WorldServer"), "P");
+		RANDOM_SOURCE = new ThreadAccessRandomSource();
+		calculator = new BlocksCalculator_v1_19_R1(RANDOM_SOURCE);
+	}
 
 	@Override
 	public Map<Position, BlockActionContext> calculateChangedBlocks(Position destroyed, Player player) {
@@ -90,7 +98,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			Player player = Bukkit.getPlayer(playerName);
 			Position pos = new Position(player.getWorld(), blockPos.u(), blockPos.v(), blockPos.w());
 			IBlockData iblockdata = (IBlockData) pos.getIBlockData();
-			if (iblockdata.getBukkitMaterial().isAir() || isInvalid(player, pos)) {
+			if (cannotBeDestroyed(iblockdata.getBukkitMaterial(), false) || isInvalid(player, pos)) {
 				sendCancelPackets(packet, player, blockPos, iblockdata);
 				return true;
 			}
@@ -105,9 +113,10 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			Position pos = new Position(player.getWorld(), blockPos.u(), blockPos.v(), blockPos.w());
 			IBlockData iblockdata = (IBlockData) pos.getIBlockData();
 			EntityPlayer nmsPlayer = ((CraftPlayer) player).getHandle();
+			Item hand = nmsPlayer.fA().f().c();
 
 			if (player.getGameMode() == GameMode.CREATIVE) {
-				if (iblockdata.getBukkitMaterial().isAir() || isInvalid(player, pos)) {
+				if (cannotBeDestroyed(iblockdata.getBukkitMaterial(), true) || isInvalid(player, pos) || !Loader.ALLOW_BREAKING_WITH_SWORD && hand instanceof ItemSword) {
 					sendCancelPackets(packet, player, blockPos, iblockdata);
 					return true;
 				}
@@ -117,13 +126,42 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			// iblockdata.a(nmsPlayer.s, blockPos, nmsPlayer); // hit block
 			float f = getDamageOfBlock(iblockdata, nmsPlayer, nmsPlayer.s, blockPos); // get damage
 			if (f >= 1.0F) {
-				if (iblockdata.getBukkitMaterial().isAir() || isInvalid(player, pos)) {
+				if (cannotBeDestroyed(iblockdata.getBukkitMaterial(), false) || isInvalid(player, pos)) {
 					sendCancelPackets(packet, player, blockPos, iblockdata);
 					return true;
 				}
 				processBlockBreak(packet, player, nmsPlayer, iblockdata, blockPos, pos, true, true);
 				return true;
 			}
+		}
+		return false;
+	}
+
+	private boolean cannotBeDestroyed(Material bukkitMaterial, boolean creative) {
+		switch (bukkitMaterial) {
+		case AIR:
+		case CAVE_AIR:
+		case VOID_AIR:
+		case WATER:
+		case LAVA:
+		case BUBBLE_COLUMN:
+			return false;
+		case BARRIER:
+		case LIGHT:
+		case BEDROCK:
+		case STRUCTURE_BLOCK:
+		case STRUCTURE_VOID:
+		case COMMAND_BLOCK:
+		case CHAIN_COMMAND_BLOCK:
+		case REPEATING_COMMAND_BLOCK:
+		case END_PORTAL_FRAME:
+		case END_PORTAL:
+		case NETHER_PORTAL:
+			if (creative)
+				return true;
+			return false;
+		default:
+			break;
 		}
 		return false;
 	}
@@ -147,9 +185,9 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				BukkitLoader.getNmsProvider().toMaterial(iblockdata)
 						.setNBT(iblockdata.b() instanceof ITileEntity ? BukkitLoader.getNmsProvider().getNBTOfTile(pos.getNMSChunk(), pos.getBlockX(), pos.getBlockY(), pos.getBlockZ()) : null),
 				instantlyBroken, BlockFace.valueOf(packet.c().name()));
+		event.setDropItems(dropItems);
 		if (player.getGameMode() == GameMode.CREATIVE)
 			event.setTileDrops(!Loader.DISABLE_TILE_DROPS);
-		event.setDropItems(dropItems);
 
 		if (instantlyBroken) {
 			PlayerInteractEvent interactEvent = new PlayerInteractEvent(player, Action.LEFT_CLICK_BLOCK, player.getItemInHand(), pos.getBlock(), event.getBlockFace());
@@ -289,7 +327,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			if (breakEvent.isDropItems() && modifyBlock.getValue().getLoot() != null)
 				for (ItemStack stack : modifyBlock.getValue().getLoot())
 					loot.add(stack);
-			if (breakEvent.isDropItems() && breakEvent.doTileDrops() && modifyBlock.getValue().getTileLoot() != null)
+			if (breakEvent.doTileDrops() && modifyBlock.getValue().getTileLoot() != null)
 				for (ItemStack stack : modifyBlock.getValue().getTileLoot())
 					loot.add(stack);
 			if (modifyBlock.getValue().isDestroy()) {
@@ -323,12 +361,12 @@ public class v1_19_R1 implements BlockDestroyHandler {
 
 		// Drop items & exp
 		Location dropLoc = pos.add(0.5, 0, 0.5).toLocation();
-		if (!loot.getItems().isEmpty() && breakEvent.isDropItems() || breakEvent.getExpToDrop() > 0)
+		if (!loot.getItems().isEmpty() || breakEvent.getExpToDrop() > 0)
 			MinecraftServer.getServer().execute(() -> {
 
 				// Do not call event if isn't registered any listener
 				if (AsyncBlockDropItemEvent.getHandlerList().getRegisteredListeners().length == 0) {
-					if (!loot.getItems().isEmpty() && breakEvent.isDropItems())
+					if (!loot.getItems().isEmpty())
 						for (ItemStack drop : loot.getItems())
 							player.getWorld().dropItem(dropLoc, drop, breakEvent.getItemConsumer());
 					if (breakEvent.getExpToDrop() > 0)

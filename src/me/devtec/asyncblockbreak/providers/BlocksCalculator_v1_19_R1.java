@@ -99,10 +99,14 @@ public class BlocksCalculator_v1_19_R1 {
 	static IBlockState<Boolean> PISTON_ACTIVATED = BlockProperties.g;
 	static IBlockState<EnumDirection> DIRECTION = BlockProperties.Q;
 	static IBlockState<BlockPropertyTrackPosition> TRACK_SHAPE = BlockProperties.ag;
+	static IBlockState<Boolean> DRAG = BlockProperties.e;
 
 	static Field stemmedField = Ref.field(BlockStemAttached.class, "d");
 
 	private RandomSource SINGLE_THREAD_RANDOM_SOURCE;
+
+	// TODO
+	// upgrade chorus destroying
 
 	public BlocksCalculator_v1_19_R1(ThreadAccessRandomSource RANDOM_SOURCE) {
 		SINGLE_THREAD_RANDOM_SOURCE = new ThreadAccessServerRandomSource(RANDOM_SOURCE);
@@ -182,7 +186,7 @@ public class BlocksCalculator_v1_19_R1 {
 
 			if (isVine(material))
 				destroyVine(map, player, destroyed, iblockdata, true);
-		} else if (isWeepingVines(material)) {
+		} else if (isGrowingDown(material)) {
 			fixPlantIfType(map, destroyed.clone().add(0, 1, 0));
 
 			destroyed = destroyed.clone();
@@ -191,13 +195,27 @@ public class BlocksCalculator_v1_19_R1 {
 			iblockdata = (IBlockData) destroyed.getIBlockData();
 			material = iblockdata.getBukkitMaterial();
 
-			if (isWeepingVines(material))
-				destroyWeepingVines(map, player, destroyed, iblockdata);
+			if (isGrowingDown(material))
+				destroyGrowingDownVines(map, player, destroyed, iblockdata);
 		} else if (material == Material.CHORUS_FLOWER || material == Material.POPPED_CHORUS_FRUIT)
 			updateChorusPlant(map, destroyed.clone());
 		else if (material == Material.CHORUS_PLANT)
 			destroyChorusInit(map, player, destroyed, iblockdata);
 		else if (isGrowingUp(material)) {
+			boolean REPLACE_WITH_BUBBLES = false;
+			boolean DRAG_DOWN = false;
+			if (material == Material.KELP || material == Material.KELP_PLANT) {
+				Position cloned = destroyed.clone();
+				cloned.setY(cloned.getY() - 1);
+
+				IBlockData data = (IBlockData) cloned.getIBlockData();
+				REPLACE_WITH_BUBBLES = data.getBukkitMaterial() == Material.SOUL_SAND || material == Material.MAGMA_BLOCK;
+				DRAG_DOWN = material == Material.MAGMA_BLOCK;
+			}
+
+			if (REPLACE_WITH_BUBBLES)
+				map.get(destroyed).withoutUpdatePhysics().setIBlockData(Blocks.lO.m().a(DRAG, DRAG_DOWN));
+
 			fixPlantIfType(map, destroyed.clone().add(0, -1, 0));
 
 			destroyed = destroyed.clone();
@@ -207,10 +225,35 @@ public class BlocksCalculator_v1_19_R1 {
 			material = iblockdata.getBukkitMaterial();
 
 			if (isGrowingUp(material))
-				destroyGrowingUp(map, player, destroyed, iblockdata);
+				destroyGrowingUp(map, player, destroyed, iblockdata, REPLACE_WITH_BUBBLES, DRAG_DOWN);
+			else if (REPLACE_WITH_BUBBLES && (material == Material.WATER || material == Material.BUBBLE_COLUMN)) {
+				map.put(destroyed, BlockActionContext.updateState(Blocks.lO.m().a(DRAG, DRAG_DOWN)));
+
+				Position cloned = destroyed.clone();
+				cloned.setY(cloned.getY() + 1);
+				IBlockData data = (IBlockData) cloned.getIBlockData();
+				while (data.getBukkitMaterial() == Material.WATER) {
+					map.put(cloned, BlockActionContext.updateState(Blocks.lO.m().a(DRAG, DRAG_DOWN)));
+					cloned = cloned.clone();
+					cloned.setY(cloned.getY() + 1);
+					data = (IBlockData) cloned.getIBlockData();
+				}
+			}
 		} else if (material.isSolid() && !isWallBlock(material)) {
 			if (isContainerTile(iblockdata.b()))
 				destroyContainerTile(map, player, destroyed, iblockdata);
+			if (material == Material.SOUL_SAND || material == Material.MAGMA_BLOCK) {
+				Position cloned = destroyed.clone();
+				cloned.setY(cloned.getY() + 1);
+
+				IBlockData data = (IBlockData) cloned.getIBlockData();
+				while (data.getBukkitMaterial() == Material.BUBBLE_COLUMN) {
+					map.put(cloned, BlockActionContext.updateState(Material.WATER));
+					cloned = cloned.clone();
+					cloned.setY(cloned.getY() + 1);
+					data = (IBlockData) cloned.getIBlockData();
+				}
+			}
 			destroyAround(map, player, destroyed, iblockdata);
 		} else if (isConnectableWallBlock(material))
 			destroyConnectableBlocks(map, player, destroyed, iblockdata);
@@ -421,6 +464,9 @@ public class BlocksCalculator_v1_19_R1 {
 		case WEEPING_VINES_PLANT:
 			map.put(destroyed, BlockActionContext.updateState(Material.WEEPING_VINES));
 			break;
+		case CAVE_VINES_PLANT:
+			map.put(destroyed, BlockActionContext.updateState(Material.CAVE_VINES));
+			break;
 		default:
 			break;
 		}
@@ -452,13 +498,15 @@ public class BlocksCalculator_v1_19_R1 {
 	}
 
 	private void destroyAround(Map<Position, BlockActionContext> map, Player player, Position destroyed, IBlockData iblockdata) {
+		boolean UP_WATER = false;
+
 		// UP
 		Position cloned = destroyed.clone().add(0, 1, 0);
 		iblockdata = getIBlockDataOrEmpty(map, cloned);
 		Material material = iblockdata.getBukkitMaterial();
-		if (shouldSkip(material)) {
-			// ignored
-		} else if (isAmethyst(material) && iblockdata.c(DIRECTION) == EnumDirection.b)
+		if (shouldSkip(material))// ignored
+			UP_WATER = material == Material.WATER || material == Material.BUBBLE_COLUMN;
+		else if (isAmethyst(material) && iblockdata.c(DIRECTION) == EnumDirection.b)
 			map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 		else if (material == Material.SCULK_VEIN) {
 			if (!iblockdata.c(east) && !iblockdata.c(north) && !iblockdata.c(south) && !iblockdata.c(west) && !iblockdata.c(up))
@@ -503,6 +551,9 @@ public class BlocksCalculator_v1_19_R1 {
 		} else if (isGrowingUp(material)) {
 			fixPlantIfType(map, cloned.clone().add(0, -1, 0));
 
+			if (material == Material.SEAGRASS || material == Material.TALL_SEAGRASS || material == Material.KELP || material == Material.KELP_PLANT)
+				UP_WATER = true;
+
 			map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 			cloned = cloned.clone();
 			cloned.setY(cloned.getY() + 1);
@@ -511,7 +562,7 @@ public class BlocksCalculator_v1_19_R1 {
 			material = iblockdata.getBukkitMaterial();
 
 			if (isGrowingUp(material))
-				destroyGrowingUp(map, player, cloned, iblockdata);
+				destroyGrowingUp(map, player, cloned, iblockdata, false, false);
 		} else if (!isHead(material) && material != Material.END_ROD && material != Material.COBWEB && (!material.isSolid() || isPressurePlate(material) || isSign(material) || isBanner(material)))
 			if (!iblockdata.b(attach) && !isWallBlock(material) || iblockdata.b(attach) && iblockdata.c(attach) == BlockPropertyAttachPosition.a) {
 				map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
@@ -538,13 +589,16 @@ public class BlocksCalculator_v1_19_R1 {
 				}
 		}
 
+		boolean DOWN_BUBBLES_OR_SPECIAL_BLOCK = false;
+
 		// DOWN
 		cloned = destroyed.clone().add(0, -1, 0);
 		iblockdata = getIBlockDataOrEmpty(map, cloned);
 		material = iblockdata.getBukkitMaterial();
-		if (shouldSkip(material)) {
-			// ignored
-		} else if (isAmethyst(material) && iblockdata.c(DIRECTION) == EnumDirection.a)
+		if (shouldSkip(material))
+			DOWN_BUBBLES_OR_SPECIAL_BLOCK = material == Material.BUBBLE_COLUMN;
+		// ignored
+		else if (isAmethyst(material) && iblockdata.c(DIRECTION) == EnumDirection.a)
 			map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 		else if (material == Material.SCULK_VEIN) {
 			if (!iblockdata.c(east) && !iblockdata.c(north) && !iblockdata.c(south) && !iblockdata.c(west) && !iblockdata.c(down))
@@ -571,7 +625,7 @@ public class BlocksCalculator_v1_19_R1 {
 			removeAllSurroundingPortals(map, cloned);
 		} else if (isVine(material))
 			destroyVine(map, player, cloned, iblockdata, false);
-		else if (isWeepingVines(material)) {
+		else if (isGrowingDown(material)) {
 			fixPlantIfType(map, cloned.clone().add(0, 1, 0));
 
 			map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
@@ -581,10 +635,12 @@ public class BlocksCalculator_v1_19_R1 {
 			iblockdata = getIBlockDataOrEmpty(map, cloned);
 			material = iblockdata.getBukkitMaterial();
 
-			if (isWeepingVines(material))
-				destroyWeepingVines(map, player, cloned, iblockdata);
+			if (isGrowingDown(material))
+				destroyGrowingDownVines(map, player, cloned, iblockdata);
 		} else if (material == Material.SPORE_BLOSSOM || material == Material.HANGING_ROOTS || iblockdata.b(attach) && iblockdata.c(attach) == BlockPropertyAttachPosition.c)
 			map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
+		else
+			DOWN_BUBBLES_OR_SPECIAL_BLOCK = material == Material.MAGMA_BLOCK || material == Material.SOUL_SAND;
 		if (isConnectable(material)) {
 			BlockActionContext existing = map.get(cloned);
 			if (existing != null)
@@ -601,6 +657,27 @@ public class BlocksCalculator_v1_19_R1 {
 					if (material == Material.REDSTONE_WIRE)
 						updateRedstoneWireAt(map, cloned2, iblockdata);
 				}
+		}
+
+		if (UP_WATER && DOWN_BUBBLES_OR_SPECIAL_BLOCK) {
+			boolean drag_down = false;
+			if (material == Material.BUBBLE_COLUMN)
+				drag_down = iblockdata.c(DRAG);
+			else if (material == Material.MAGMA_BLOCK)
+				drag_down = true;
+
+			map.get(destroyed).withoutUpdatePhysics().setIBlockData(Blocks.lO.m().a(DRAG, drag_down)); // change type of destroyed block instantly without update
+
+			cloned = destroyed.clone();
+			cloned.setY(cloned.getY() + 1);
+			iblockdata = getIBlockDataOrEmpty(map, cloned);
+			while (iblockdata.getBukkitMaterial() == Material.WATER || iblockdata.getBukkitMaterial() == Material.BUBBLE_COLUMN) {
+				map.put(cloned, BlockActionContext.updateState(Blocks.lO.m().a(DRAG, drag_down)));
+
+				cloned = cloned.clone();
+				cloned.setY(cloned.getY() + 1);
+				iblockdata = getIBlockDataOrEmpty(map, cloned);
+			}
 		}
 
 		// sides
@@ -714,6 +791,7 @@ public class BlocksCalculator_v1_19_R1 {
 		case CAVE_AIR:
 		case LAVA:
 		case WATER:
+		case BUBBLE_COLUMN:
 			return true;
 		default:
 			break;
@@ -1166,8 +1244,11 @@ public class BlocksCalculator_v1_19_R1 {
 		return false;
 	}
 
-	private void destroyGrowingUp(Map<Position, BlockActionContext> map, Player player, Position destroyed, IBlockData iblockdata) {
-		map.put(destroyed, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, destroyed, iblockdata, player)));
+	private void destroyGrowingUp(Map<Position, BlockActionContext> map, Player player, Position destroyed, IBlockData iblockdata, boolean bubbles, boolean drag_down) {
+		if (bubbles && isWaterlogged(iblockdata) == Material.WATER)
+			map.put(destroyed, BlockActionContext.updateState(Blocks.lO.m().a(DRAG, drag_down)));
+		else
+			map.put(destroyed, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, destroyed, iblockdata, player)));
 
 		destroyed = destroyed.clone();
 		destroyed.setY(destroyed.getY() + 1);
@@ -1175,10 +1256,18 @@ public class BlocksCalculator_v1_19_R1 {
 		iblockdata = (IBlockData) destroyed.getIBlockData();
 
 		if (isGrowingUp(iblockdata.getBukkitMaterial()))
-			destroyGrowingUp(map, player, destroyed, iblockdata);
+			destroyGrowingUp(map, player, destroyed, iblockdata, bubbles, drag_down);
+		else if (bubbles)
+			while (iblockdata.getBukkitMaterial() == Material.WATER) {
+				map.put(destroyed, BlockActionContext.updateState(Blocks.lO.m().a(DRAG, drag_down)));
+
+				destroyed = destroyed.clone();
+				destroyed.setY(destroyed.getY() + 1);
+				iblockdata = (IBlockData) destroyed.getIBlockData();
+			}
 	}
 
-	private void destroyWeepingVines(Map<Position, BlockActionContext> map, Player player, Position destroyed, IBlockData iblockdata) {
+	private void destroyGrowingDownVines(Map<Position, BlockActionContext> map, Player player, Position destroyed, IBlockData iblockdata) {
 		map.put(destroyed, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, destroyed, iblockdata, player)));
 
 		destroyed = destroyed.clone();
@@ -1186,14 +1275,16 @@ public class BlocksCalculator_v1_19_R1 {
 
 		iblockdata = (IBlockData) destroyed.getIBlockData();
 
-		if (isWeepingVines(iblockdata.getBukkitMaterial()))
-			destroyWeepingVines(map, player, destroyed, iblockdata);
+		if (isGrowingDown(iblockdata.getBukkitMaterial()))
+			destroyGrowingDownVines(map, player, destroyed, iblockdata);
 	}
 
-	private boolean isWeepingVines(Material material) {
+	private boolean isGrowingDown(Material material) {
 		switch (material) {
 		case WEEPING_VINES:
 		case WEEPING_VINES_PLANT:
+		case CAVE_VINES:
+		case CAVE_VINES_PLANT:
 			return true;
 		default:
 			break;
@@ -1314,8 +1405,7 @@ public class BlocksCalculator_v1_19_R1 {
 
 	private IBlockData getIBlockDataOrEmpty(Map<Position, BlockActionContext> map, Position add) {
 		BlockActionContext context = map.get(add);
-		return context != null ? context.isDestroy() ? Blocks.a.m() : context.getIBlockData() != null ? (IBlockData) context.getIBlockData() : (IBlockData) context.getData().getIBlockData()
-				: (IBlockData) add.getIBlockData();
+		return context != null ? context.getIBlockData() != null ? (IBlockData) context.getIBlockData() : (IBlockData) context.getData().getIBlockData() : (IBlockData) add.getIBlockData();
 	}
 
 	private void destroyVineLadder(Map<Position, BlockActionContext> map, Player player, Position destroyed, IBlockData iblockdata, boolean first) {

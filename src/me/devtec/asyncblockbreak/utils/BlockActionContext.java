@@ -8,7 +8,6 @@ import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 
 import me.devtec.theapi.bukkit.game.BlockDataStorage;
-import net.minecraft.world.level.block.state.IBlockData;
 
 public class BlockActionContext {
 	private boolean destroy;
@@ -58,6 +57,11 @@ public class BlockActionContext {
 
 	public BlockActionContext doUpdatePhysics() {
 		updatePhysics = true;
+		return this;
+	}
+
+	public BlockActionContext withoutUpdatePhysics() {
+		updatePhysics = false;
 		return this;
 	}
 
@@ -112,7 +116,7 @@ public class BlockActionContext {
 		iblockdata = null;
 	}
 
-	public void setIBlockData(IBlockData state) {
+	public void setIBlockData(Object state) {
 		destroy = false;
 		newType = null;
 		iblockdata = state;

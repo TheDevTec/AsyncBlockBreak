@@ -137,6 +137,13 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 		tileDrops = status;
 	}
 
+	@Override
+	public void setDropItems(boolean status) {
+		super.setDropItems(status);
+		tileDrops = status;
+		loot.clear();
+	}
+
 	public BlockDataStorage getBlockData() {
 		return blockData;
 	}

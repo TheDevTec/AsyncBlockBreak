@@ -1,6 +1,7 @@
 package me.devtec.asyncblockbreak.providers;
 
 import java.lang.reflect.Field;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -83,11 +84,11 @@ public class v1_19_R1 implements BlockDestroyHandler {
 
 	@Override
 	public Map<Position, BlockActionContext> calculateChangedBlocks(Position destroyed, Player player) {
-		return calculateChangedBlocks(destroyed, player, ((CraftPlayer) player).getHandle().fA().f());
+		return calculateChangedBlocks(new HashMap<>(), destroyed, player, ((CraftPlayer) player).getHandle().fA().f());
 	}
 
-	public Map<Position, BlockActionContext> calculateChangedBlocks(Position destroyed, Player player, net.minecraft.world.item.ItemStack itemInHand) {
-		return calculator.calculateChangedBlocks(destroyed, player, itemInHand);
+	public Map<Position, BlockActionContext> calculateChangedBlocks(Map<Position, BlockActionContext> map, Position destroyed, Player player, net.minecraft.world.item.ItemStack itemInHand) {
+		return calculator.calculateChangedBlocks(map, destroyed, player, itemInHand);
 	}
 
 	@Override
@@ -180,11 +181,23 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	 */
 	private void processBlockBreak(PacketPlayInBlockDig packet, Player player, EntityPlayer nmsPlayer, IBlockData iblockdata, BlockPosition blockPos, Position pos, boolean dropItems,
 			boolean instantlyBroken) {
-		Integer[] integer = { 0 };
-		AsyncBlockBreakEvent event = new AsyncBlockBreakEvent(integer, pos, calculateChangedBlocks(pos, player), player,
-				BukkitLoader.getNmsProvider().toMaterial(iblockdata)
-						.setNBT(iblockdata.b() instanceof ITileEntity ? BukkitLoader.getNmsProvider().getNBTOfTile(pos.getNMSChunk(), pos.getBlockX(), pos.getBlockY(), pos.getBlockZ()) : null),
-				instantlyBroken, BlockFace.valueOf(packet.c().name()));
+
+		long threadId = Thread.currentThread().getId();
+		AsyncBlockBreakEvent cachedEvent = calculator.getBreak(threadId);
+		AsyncBlockBreakEvent event;
+		if (cachedEvent == null)
+			event = calculator.putBreak(threadId, new Integer[] { 0 }, pos, calculateChangedBlocks(pos, player), player,
+					BukkitLoader.getNmsProvider().toMaterial(iblockdata)
+							.setNBT(iblockdata.b() instanceof ITileEntity ? BukkitLoader.getNmsProvider().getNBTOfTile(pos.getNMSChunk(), pos.getBlockX(), pos.getBlockY(), pos.getBlockZ()) : null),
+					instantlyBroken, BlockFace.valueOf(packet.c().name()));
+		else {
+			event = cachedEvent;
+			event.getModifiedBlocks().clear();
+			event.replaceEventStatement(pos, calculateChangedBlocks(event.getModifiedBlocks(), pos, player, ((CraftPlayer) player).getHandle().fA().f()), player,
+					BukkitLoader.getNmsProvider().toMaterial(iblockdata)
+							.setNBT(iblockdata.b() instanceof ITileEntity ? BukkitLoader.getNmsProvider().getNBTOfTile(pos.getNMSChunk(), pos.getBlockX(), pos.getBlockY(), pos.getBlockZ()) : null),
+					instantlyBroken, BlockFace.valueOf(packet.c().name()));
+		}
 		event.setDropItems(dropItems);
 		if (player.getGameMode() == GameMode.CREATIVE)
 			event.setTileDrops(!Loader.DISABLE_TILE_DROPS);
@@ -211,7 +224,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 							return;
 						}
 						Bukkit.getPluginManager().callEvent(event);
-						integer[0] = 1;
+						event.setFinished();
 						if (event.isCancelled()) {
 							sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
 							return;
@@ -243,8 +256,10 @@ public class v1_19_R1 implements BlockDestroyHandler {
 
 		if (Loader.SYNC_EVENT)
 			BukkitLoader.getNmsProvider().postToMainThread(() -> {
+				if (event.isAsynchronous())
+					Ref.set(event, async, false);
 				Bukkit.getPluginManager().callEvent(event);
-				integer[0] = 1;
+				event.setFinished();
 				if (event.isCancelled()) {
 					sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
 					return;
@@ -252,9 +267,10 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				breakBlock(player, pos, iblockdata, nmsPlayer, packet, event, hand);
 			});
 		else {
-			Ref.set(event, async, true);
+			if (!event.isAsynchronous())
+				Ref.set(event, async, true);
 			Bukkit.getPluginManager().callEvent(event);
-			integer[0] = 1;
+			event.setFinished();
 			if (event.isCancelled()) {
 				sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
 				return;

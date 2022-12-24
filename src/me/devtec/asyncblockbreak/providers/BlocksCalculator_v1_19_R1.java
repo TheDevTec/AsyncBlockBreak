@@ -3,9 +3,9 @@ package me.devtec.asyncblockbreak.providers;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Material;
 import org.bukkit.block.BlockFace;
@@ -16,9 +16,12 @@ import org.bukkit.entity.Player;
 
 import me.devtec.asyncblockbreak.Loader;
 import me.devtec.asyncblockbreak.api.LootTable;
+import me.devtec.asyncblockbreak.events.AsyncBlockBreakEvent;
+import me.devtec.asyncblockbreak.events.AsyncBlockDropItemEvent;
 import me.devtec.asyncblockbreak.providers.math.ThreadAccessRandomSource;
 import me.devtec.asyncblockbreak.utils.BlockActionContext;
 import me.devtec.shared.Ref;
+import me.devtec.theapi.bukkit.game.BlockDataStorage;
 import me.devtec.theapi.bukkit.game.Position;
 import net.minecraft.core.BlockPosition;
 import net.minecraft.core.EnumDirection;
@@ -103,6 +106,9 @@ public class BlocksCalculator_v1_19_R1 {
 
 	static Field stemmedField = Ref.field(BlockStemAttached.class, "d");
 
+	static Map<Long, AsyncBlockBreakEvent> breakEvent = new ConcurrentHashMap<>();
+	static Map<Long, AsyncBlockDropItemEvent> dropEvent = new ConcurrentHashMap<>();
+
 	private RandomSource SINGLE_THREAD_RANDOM_SOURCE;
 
 	// TODO
@@ -112,8 +118,7 @@ public class BlocksCalculator_v1_19_R1 {
 		SINGLE_THREAD_RANDOM_SOURCE = new ThreadAccessServerRandomSource(RANDOM_SOURCE);
 	}
 
-	public Map<Position, BlockActionContext> calculateChangedBlocks(Position destroyed, Player player, ItemStack hand) {
-		Map<Position, BlockActionContext> map = new HashMap<>();
+	public Map<Position, BlockActionContext> calculateChangedBlocks(Map<Position, BlockActionContext> map, Position destroyed, Player player, ItemStack hand) {
 		IBlockData iblockdata = (IBlockData) destroyed.getIBlockData();
 
 		map.put(destroyed, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(hand, destroyed, iblockdata, player)));
@@ -1217,7 +1222,10 @@ public class BlocksCalculator_v1_19_R1 {
 			List<org.bukkit.inventory.ItemStack> items = new ArrayList<>();
 			Builder loottableinfo_builder = new Builder(world).a(SINGLE_THREAD_RANDOM_SOURCE).a(LootContextParameters.f, Vec3D.a(position)).a(LootContextParameters.i, nms == null ? ItemStack.b : nms)
 					.b(LootContextParameters.a, entity == null ? null : ((CraftEntity) entity).getHandle()).b(LootContextParameters.h, ((Chunk) pos.getNMSChunk()).getTileEntityImmediately(position));
-			for (ItemStack drop : iblockdata.a(loottableinfo_builder))
+			List<ItemStack> drops = iblockdata.a(loottableinfo_builder);
+			if (drops.isEmpty())
+				return Collections.emptyList();
+			for (ItemStack drop : drops)
 				items.add(CraftItemStack.asBukkitCopy(drop));
 			return items;
 		}
@@ -1780,5 +1788,16 @@ public class BlocksCalculator_v1_19_R1 {
 		public float i() {
 			return random.floatChance();
 		}
+	}
+
+	public AsyncBlockBreakEvent getBreak(long id) {
+		return breakEvent.get(id);
+	}
+
+	public AsyncBlockBreakEvent putBreak(long id, Integer[] result, Position initBlock, Map<Position, BlockActionContext> modifiedBlocks, Player player, BlockDataStorage blockData,
+			boolean instantlyBroken, BlockFace face) {
+		AsyncBlockBreakEvent event = new AsyncBlockBreakEvent(result, initBlock, modifiedBlocks, player, blockData, instantlyBroken, face);
+		breakEvent.put(id, event);
+		return event;
 	}
 }

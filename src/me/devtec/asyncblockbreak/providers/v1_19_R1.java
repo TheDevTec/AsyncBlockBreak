@@ -84,11 +84,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 
 	@Override
 	public Map<Position, BlockActionContext> calculateChangedBlocks(Position destroyed, Player player) {
-		return calculateChangedBlocks(new HashMap<>(), destroyed, player, ((CraftPlayer) player).getHandle().fA().f());
-	}
-
-	public Map<Position, BlockActionContext> calculateChangedBlocks(Map<Position, BlockActionContext> map, Position destroyed, Player player, net.minecraft.world.item.ItemStack itemInHand) {
-		return calculator.calculateChangedBlocks(map, destroyed, player, itemInHand);
+		return calculator.calculateChangedBlocks(new HashMap<>(), destroyed, player, ((CraftPlayer) player).getHandle().fA().f());
 	}
 
 	@Override

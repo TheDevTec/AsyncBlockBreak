@@ -75,6 +75,10 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	private ThreadAccessRandomSource RANDOM_SOURCE;
 	private BlocksCalculator_v1_19_R1 calculator;
 
+	// TODO implement item settings - "can destroy"
+	// TODO cancel destroying of blocks in the adventure mode if item cannot destroy
+	// block - read above
+
 	public v1_19_R1() {
 		IS_PAPER = Ref.getClass("io.papermc.paper.chunk.system.scheduling.NewChunkHolder") != null;
 		persistentEntitySectionManager = IS_PAPER ? null : Ref.field(Ref.nms("server.level", "WorldServer"), "P");

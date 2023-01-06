@@ -9,6 +9,7 @@ import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
 import me.devtec.asyncblockbreak.Loader;
+import me.devtec.asyncblockbreak.Settings;
 import me.devtec.shared.Ref;
 import me.devtec.shared.components.Component;
 import me.devtec.theapi.bukkit.BukkitLoader;
@@ -21,15 +22,15 @@ public interface BlockDestroyHandler {
 	boolean handle(String player, Object packet);
 
 	default boolean isInvalid(Player player, Position pos) {
-		return !player.isOnline() || !player.isValid() || player.isDead() || player.getHealth() <= 0 || player.getGameMode() == GameMode.SPECTATOR || Loader.KICK_PLAYER
+		return !player.isOnline() || !player.isValid() || player.isDead() || player.getHealth() <= 0 || player.getGameMode() == GameMode.SPECTATOR || Settings.AntiCheat.ACTION_KICK_PLAYER
 				? Loader.kick.contains(player.getUniqueId())
 				: false || invalidRange(player.getLocation(), player, pos);
 	}
 
 	default boolean invalidRange(Location location, Player player, Position pos) {
 		double radius = pos.distance(location);
-		if (Loader.MAXIMUM_RADIUS_WITHIN_BLOCK_AND_PLAYER != 0 && radius > Loader.MAXIMUM_RADIUS_WITHIN_BLOCK_AND_PLAYER) {
-			if (Loader.KICK_PLAYER) {
+		if (Settings.AntiCheat.MAXIMUM_RADIUS_WITHIN_BLOCK_AND_PLAYER != 0 && radius > Settings.AntiCheat.MAXIMUM_RADIUS_WITHIN_BLOCK_AND_PLAYER) {
+			if (Settings.AntiCheat.ACTION_KICK_PLAYER) {
 				Loader.kick.add(player.getUniqueId());
 				BukkitLoader.getPacketHandler().send(player,
 						Ref.newInstance(packetDisconnect, BukkitLoader.getNmsProvider().toIChatBaseComponent(new Component("Destroyed block at too far distance (Hacking?)"))));
@@ -37,11 +38,11 @@ public interface BlockDestroyHandler {
 			announce("Player " + player.getName() + "[" + player.getUniqueId() + "] destroyed a block at too far a distance (" + radius + ") (Hacking?)");
 			return true;
 		}
-		if (Loader.DESTROYED_BLOCKS_LIMIT == 0)
+		if (Settings.AntiCheat.DESTROYED_BLOCKS_LIMIT == 0)
 			return false;
 		int destroyedBlocks = Loader.destroyedCountInTick.getOrDefault(player.getUniqueId(), 0) + 1;
-		if (destroyedBlocks > Loader.DESTROYED_BLOCKS_LIMIT) {
-			if (Loader.KICK_PLAYER) {
+		if (destroyedBlocks > Settings.AntiCheat.DESTROYED_BLOCKS_LIMIT) {
+			if (Settings.AntiCheat.ACTION_KICK_PLAYER) {
 				Loader.kick.add(player.getUniqueId());
 				BukkitLoader.getPacketHandler().send(player,
 						Ref.newInstance(packetDisconnect, BukkitLoader.getNmsProvider().toIChatBaseComponent(new Component("Too many blocks destroyed in one server tick (Hacking?)"))));
@@ -56,11 +57,11 @@ public interface BlockDestroyHandler {
 	Map<Position, BlockActionContext> calculateChangedBlocks(Position destroyed, Player player);
 
 	default void announce(String text) {
-		if (Loader.BROADCAST_CONSOLE)
+		if (Settings.AntiCheat.ACTION_BROADCAST_CONSOLE)
 			Bukkit.getConsoleSender().sendMessage(text);
-		if (Loader.BROADCAST_ADMINS)
+		if (Settings.AntiCheat.ACTION_BROADCAST_ADMINS)
 			for (Player player : Bukkit.getOnlinePlayers())
-				if (player.hasPermission("asyncblockbreak.anticheat"))
+				if (player.hasPermission(Settings.AntiCheat.ANTICHEAT_BROADCAST_PERMISSION))
 					player.sendMessage(text);
 	}
 }

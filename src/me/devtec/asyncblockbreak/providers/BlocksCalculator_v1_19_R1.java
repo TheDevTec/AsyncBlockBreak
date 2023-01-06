@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Material;
 import org.bukkit.block.BlockFace;
@@ -14,14 +13,10 @@ import org.bukkit.craftbukkit.v1_19_R1.entity.CraftEntity;
 import org.bukkit.craftbukkit.v1_19_R1.inventory.CraftItemStack;
 import org.bukkit.entity.Player;
 
-import me.devtec.asyncblockbreak.Loader;
-import me.devtec.asyncblockbreak.api.LootTable;
-import me.devtec.asyncblockbreak.events.AsyncBlockBreakEvent;
-import me.devtec.asyncblockbreak.events.AsyncBlockDropItemEvent;
+import me.devtec.asyncblockbreak.Settings;
 import me.devtec.asyncblockbreak.providers.math.ThreadAccessRandomSource;
 import me.devtec.asyncblockbreak.utils.BlockActionContext;
 import me.devtec.shared.Ref;
-import me.devtec.theapi.bukkit.game.BlockDataStorage;
 import me.devtec.theapi.bukkit.game.Position;
 import net.minecraft.core.BlockPosition;
 import net.minecraft.core.EnumDirection;
@@ -35,7 +30,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.BlockBarrel;
 import net.minecraft.world.level.block.BlockChest;
-import net.minecraft.world.level.block.BlockChorusFruit;
 import net.minecraft.world.level.block.BlockCobbleWall;
 import net.minecraft.world.level.block.BlockDispenser;
 import net.minecraft.world.level.block.BlockFurnace;
@@ -106,13 +100,7 @@ public class BlocksCalculator_v1_19_R1 {
 
 	static Field stemmedField = Ref.field(BlockStemAttached.class, "d");
 
-	static Map<Long, AsyncBlockBreakEvent> breakEvent = new ConcurrentHashMap<>();
-	static Map<Long, AsyncBlockDropItemEvent> dropEvent = new ConcurrentHashMap<>();
-
 	private RandomSource SINGLE_THREAD_RANDOM_SOURCE;
-
-	// TODO
-	// upgrade chorus destroying
 
 	public BlocksCalculator_v1_19_R1(ThreadAccessRandomSource RANDOM_SOURCE) {
 		SINGLE_THREAD_RANDOM_SOURCE = new ThreadAccessServerRandomSource(RANDOM_SOURCE);
@@ -124,10 +112,10 @@ public class BlocksCalculator_v1_19_R1 {
 		map.put(destroyed, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(hand, destroyed, iblockdata, player)));
 
 		Material material = iblockdata.getBukkitMaterial();
-		if (iblockdata.b() instanceof BlockStairs) {
+		if (Settings.Performance.CONNECTED_BLOCKS && iblockdata.b() instanceof BlockStairs) {
 			checkAndModifyStairs(map, destroyed);
 			destroyConnectableBlocks(map, player, destroyed, iblockdata);
-		} else if (material == Material.RAIL)
+		} else if (Settings.Performance.CONNECTED_BLOCKS && material == Material.RAIL)
 			for (BlockFace faces : AXIS_FACES) {
 				Position cloned2 = destroyed.clone().add(faces);
 				iblockdata = getIBlockDataOrEmpty(map, cloned2);
@@ -173,7 +161,7 @@ public class BlocksCalculator_v1_19_R1 {
 			destroyBed(map, player, destroyed, iblockdata);
 		else if (material == Material.NETHER_PORTAL)
 			removeAllSurroundingPortals(map, destroyed);
-		else if (Loader.LADDER_WORKS_AS_VINE && material == Material.LADDER) {
+		else if (Settings.Gameplay.LADDER_WORKS_AS_VINE && material == Material.LADDER) {
 			destroyed = destroyed.clone();
 			destroyed.setY(destroyed.getY() - 1);
 
@@ -202,10 +190,10 @@ public class BlocksCalculator_v1_19_R1 {
 
 			if (isGrowingDown(material))
 				destroyGrowingDownVines(map, player, destroyed, iblockdata);
-		} else if (material == Material.CHORUS_FLOWER || material == Material.POPPED_CHORUS_FRUIT)
-			updateChorusPlant(map, destroyed.clone());
+		} else if (Settings.Performance.CHORUS_PLANT && (material == Material.CHORUS_FLOWER || material == Material.POPPED_CHORUS_FRUIT))
+			updateChorusPlant(map, destroyed.clone(), iblockdata);
 		else if (material == Material.CHORUS_PLANT)
-			destroyChorusInit(map, player, destroyed, iblockdata);
+			destroyChorusInit(map, player, destroyed, iblockdata, true);
 		else if (isGrowingUp(material)) {
 			boolean REPLACE_WITH_BUBBLES = false;
 			boolean DRAG_DOWN = false;
@@ -518,7 +506,7 @@ public class BlocksCalculator_v1_19_R1 {
 				map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 			else
 				map.put(cloned, BlockActionContext.updateState(iblockdata.a(down, false)));
-		} else if (material == Material.RAIL)
+		} else if (Settings.Performance.CONNECTED_BLOCKS && material == Material.RAIL)
 			for (BlockFace faces : AXIS_FACES) {
 				Position cloned2 = cloned.clone().add(faces);
 				iblockdata = getIBlockDataOrEmpty(map, cloned2);
@@ -526,7 +514,7 @@ public class BlocksCalculator_v1_19_R1 {
 				if (material == Material.RAIL)
 					fixRails(map, cloned2, iblockdata);
 			}
-		else if (Loader.TICK_LEAVES && iblockdata.b() instanceof BlockLeaves leaves) {
+		else if (Settings.Performance.TICK_LEAVES && iblockdata.b() instanceof BlockLeaves leaves) {
 			BlockPosition blockPos = (BlockPosition) cloned.getBlockPosition();
 			leaves.a(iblockdata, EnumDirection.a((BlockPosition) cloned.getBlockPosition()), Blocks.a.m(), ((CraftWorld) destroyed.getWorld()).getHandle(), blockPos, blockPos);
 		} else if (material == Material.POINTED_DRIPSTONE) {
@@ -552,7 +540,7 @@ public class BlocksCalculator_v1_19_R1 {
 			map.put(cloned, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, cloned, iblockdata, player)));
 		else if (material == Material.CHORUS_PLANT) {
 			map.put(cloned, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, cloned, iblockdata, player)));
-			destroyChorusInit(map, player, cloned, iblockdata);
+			destroyChorusInit(map, player, cloned, iblockdata, false);
 		} else if (isGrowingUp(material)) {
 			fixPlantIfType(map, cloned.clone().add(0, -1, 0));
 
@@ -612,7 +600,7 @@ public class BlocksCalculator_v1_19_R1 {
 				map.put(cloned, BlockActionContext.updateState(iblockdata.a(up, false)));
 		} else if (iblockdata.b() instanceof BlockCobbleWall)
 			fixWalls(map, cloned, iblockdata, BlockFace.DOWN);
-		else if (Loader.TICK_LEAVES && iblockdata.b() instanceof BlockLeaves leaves) {
+		else if (Settings.Performance.TICK_LEAVES && iblockdata.b() instanceof BlockLeaves leaves) {
 			BlockPosition blockPos = (BlockPosition) cloned.getBlockPosition();
 			leaves.a(iblockdata, EnumDirection.a((BlockPosition) cloned.getBlockPosition()), Blocks.a.m(), ((CraftWorld) destroyed.getWorld()).getHandle(), blockPos, blockPos);
 		} else if (material == Material.POINTED_DRIPSTONE) {
@@ -731,7 +719,7 @@ public class BlocksCalculator_v1_19_R1 {
 			else if (material == Material.NETHER_PORTAL && (iblockdata.c(axis) == EnumAxis.a && (face == BlockFace.EAST || face == BlockFace.WEST)
 					|| iblockdata.c(axis) == EnumAxis.c && (face == BlockFace.NORTH || face == BlockFace.SOUTH)))
 				removeAllSurroundingPortals(map, cloned);
-			else if (iblockdata.b() instanceof BlockTall) {
+			else if (Settings.Performance.CONNECTED_BLOCKS && iblockdata.b() instanceof BlockTall) {
 				int stateId = 0;
 				for (IBlockState<Boolean> state : BLOCK_ROTATIONS) {
 					BlockFace bface = stateId == 0 ? BlockFace.EAST : stateId == 1 ? BlockFace.NORTH : stateId == 2 ? BlockFace.SOUTH : BlockFace.WEST;
@@ -742,16 +730,16 @@ public class BlocksCalculator_v1_19_R1 {
 						break;
 					}
 				}
-			} else if (iblockdata.b() instanceof BlockCobbleWall)
+			} else if (Settings.Performance.CONNECTED_BLOCKS && iblockdata.b() instanceof BlockCobbleWall)
 				fixWalls(map, cloned, iblockdata, face);
-			else if (Loader.TICK_LEAVES && iblockdata.b() instanceof BlockLeaves leaves) {
+			else if (Settings.Performance.TICK_LEAVES && iblockdata.b() instanceof BlockLeaves leaves) {
 				BlockPosition blockPos = (BlockPosition) cloned.getBlockPosition();
 				leaves.a(iblockdata, EnumDirection.a((BlockPosition) cloned.getBlockPosition()), Blocks.a.m(), ((CraftWorld) destroyed.getWorld()).getHandle(), blockPos, blockPos);
-			} else if (Loader.LADDER_WORKS_AS_VINE && material == Material.LADDER)
+			} else if (Settings.Gameplay.LADDER_WORKS_AS_VINE && material == Material.LADDER)
 				destroyVineLadder(map, player, cloned, iblockdata, false);
 			else if (isVine(material))
 				destroyVine(map, player, cloned, iblockdata, false);
-			else if (!Loader.LADDER_WORKS_AS_VINE && material == Material.LADDER || isWallBlock(material) && BlockFace.valueOf(iblockdata.c(direction).name()) == face
+			else if (!Settings.Gameplay.LADDER_WORKS_AS_VINE && material == Material.LADDER || isWallBlock(material) && BlockFace.valueOf(iblockdata.c(direction).name()) == face
 					|| iblockdata.b(attach) && iblockdata.c(attach) == BlockPropertyAttachPosition.b && BlockFace.valueOf(iblockdata.c(direction).name()) == face) {
 				map.put(cloned, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata), getDrops(null, cloned, iblockdata, player)));
 				if (isWallBlock(material))
@@ -1219,12 +1207,12 @@ public class BlocksCalculator_v1_19_R1 {
 			WorldServer world = ((CraftWorld) pos.getWorld()).getHandle();
 			BlockPosition position = (BlockPosition) pos.getBlockPosition();
 
-			List<org.bukkit.inventory.ItemStack> items = new ArrayList<>();
 			Builder loottableinfo_builder = new Builder(world).a(SINGLE_THREAD_RANDOM_SOURCE).a(LootContextParameters.f, Vec3D.a(position)).a(LootContextParameters.i, nms == null ? ItemStack.b : nms)
 					.b(LootContextParameters.a, entity == null ? null : ((CraftEntity) entity).getHandle()).b(LootContextParameters.h, ((Chunk) pos.getNMSChunk()).getTileEntityImmediately(position));
 			List<ItemStack> drops = iblockdata.a(loottableinfo_builder);
 			if (drops.isEmpty())
 				return Collections.emptyList();
+			List<org.bukkit.inventory.ItemStack> items = new ArrayList<>();
 			for (ItemStack drop : drops)
 				items.add(CraftItemStack.asBukkitCopy(drop));
 			return items;
@@ -1618,118 +1606,160 @@ public class BlocksCalculator_v1_19_R1 {
 	}
 
 	/**
-	 * @apiNote Start destroying of chorus plant with flowers, see
-	 *          {@link #destroyChorus(Position, LootTable, boolean, int)}
+	 * @apiNote Start destroying of chorus plant with flowers
 	 */
-	private void destroyChorusInit(Map<Position, BlockActionContext> map, Player player, Position destroyed, IBlockData iblockdata) {
+	private void destroyChorusInit(Map<Position, BlockActionContext> map, Player player, Position destroyed, IBlockData iblockdata, boolean shouldUpdate) {
+		boolean onTop = iblockdata.c(up);
 		boolean onEast = iblockdata.c(east);
+		boolean onWest = iblockdata.c(west);
 		boolean onNorth = iblockdata.c(north);
 		boolean onSouth = iblockdata.c(south);
-		boolean onWest = iblockdata.c(west);
-		boolean onTop = iblockdata.c(up);
+
 		if (onTop) {
-			destroyChorus(map, player, destroyed.clone().add(0, 1, 0), 1);
-			return;
+			if (shouldUpdate && Settings.Performance.CHORUS_PLANT) {
+				Position cloned = destroyed.clone();
+				boolean downFalse = false;
+				if (onEast)
+					cloned.add(BlockFace.EAST);
+				else if (onWest)
+					cloned.add(BlockFace.WEST);
+				else if (onNorth)
+					cloned.add(BlockFace.NORTH);
+				else if (onSouth)
+					cloned.add(BlockFace.SOUTH);
+				else {
+					cloned.add(BlockFace.DOWN);
+					downFalse = true;
+				}
+				IBlockData data = (IBlockData) cloned.getIBlockData();
+				if (data.getBukkitMaterial() == Material.CHORUS_PLANT)
+					map.put(cloned, BlockActionContext.updateState(downFalse ? data.a(up, false) : data.a(onEast ? west : onWest ? east : onSouth ? north : south, false)));
+			}
+			destroyChorus(map, player, destroyed.clone().add(BlockFace.UP), true);
 		}
-		if (onEast)
-			destroyChorus(map, player, destroyed.clone().add(BlockFace.EAST), 0);
-		if (onNorth)
-			destroyChorus(map, player, destroyed.clone().add(BlockFace.NORTH), 0);
-		if (onSouth)
-			destroyChorus(map, player, destroyed.clone().add(BlockFace.SOUTH), 0);
-		if (onWest)
-			destroyChorus(map, player, destroyed.clone().add(BlockFace.WEST), 0);
+		boolean doUpdateDown = shouldUpdate && Settings.Performance.CHORUS_PLANT ? true : false;
+		if (onEast) {
+			if (shouldUpdate && Settings.Performance.CHORUS_PLANT) {
+				doUpdateDown = false;
+				Position cloned = destroyed.clone().add(BlockFace.EAST);
+				IBlockData data = (IBlockData) cloned.getIBlockData();
+				if (data.getBukkitMaterial() == Material.CHORUS_PLANT)
+					map.put(cloned, BlockActionContext.updateState(data.a(west, false)));
+			}
+			destroyChorus(map, player, destroyed.clone().add(BlockFace.EAST), false);
+		}
+		if (onWest) {
+			if (shouldUpdate && Settings.Performance.CHORUS_PLANT) {
+				doUpdateDown = false;
+				Position cloned = destroyed.clone().add(BlockFace.WEST);
+				IBlockData data = (IBlockData) cloned.getIBlockData();
+				if (data.getBukkitMaterial() == Material.CHORUS_PLANT)
+					map.put(cloned, BlockActionContext.updateState(data.a(east, false)));
+			}
+			destroyChorus(map, player, destroyed.clone().add(BlockFace.WEST), false);
+		}
+		if (onNorth) {
+			if (shouldUpdate && Settings.Performance.CHORUS_PLANT) {
+				doUpdateDown = false;
+				Position cloned = destroyed.clone().add(BlockFace.NORTH);
+				IBlockData data = (IBlockData) cloned.getIBlockData();
+				if (data.getBukkitMaterial() == Material.CHORUS_PLANT)
+					map.put(cloned, BlockActionContext.updateState(data.a(south, false)));
+			}
+			destroyChorus(map, player, destroyed.clone().add(BlockFace.NORTH), false);
+		}
+		if (onSouth) {
+			if (shouldUpdate && Settings.Performance.CHORUS_PLANT) {
+				doUpdateDown = false;
+				Position cloned = destroyed.clone().add(BlockFace.SOUTH);
+				IBlockData data = (IBlockData) cloned.getIBlockData();
+				if (data.getBukkitMaterial() == Material.CHORUS_PLANT)
+					map.put(cloned, BlockActionContext.updateState(data.a(north, false)));
+			}
+			destroyChorus(map, player, destroyed.clone().add(BlockFace.SOUTH), false);
+		}
+		if (doUpdateDown) {
+			Position cloned = destroyed.clone().add(BlockFace.DOWN);
+			IBlockData data = (IBlockData) cloned.getIBlockData();
+			if (data.getBukkitMaterial() == Material.CHORUS_PLANT)
+				map.put(cloned, BlockActionContext.updateState(data.a(up, false)));
+		}
 	}
 
 	/**
 	 * @apiNote Destroy chorus plant with flowers and continue to connected
 	 */
-	private void destroyChorus(Map<Position, BlockActionContext> map, Player player, Position destroyed, int direction) {
+	private void destroyChorus(Map<Position, BlockActionContext> map, Player player, Position destroyed, boolean top) {
 		IBlockData iblockdata = (IBlockData) destroyed.getIBlockData();
 		if (iblockdata.getBukkitMaterial() == Material.CHORUS_FLOWER || iblockdata.getBukkitMaterial() == Material.POPPED_CHORUS_FRUIT) {
 			map.put(destroyed, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, destroyed, iblockdata, player)));
 			return;
 		}
-		if (!(iblockdata.b() instanceof BlockChorusFruit))
+		if (iblockdata.getBukkitMaterial() != Material.CHORUS_PLANT)
 			return;
-
-		map.put(destroyed, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, destroyed, iblockdata, player)));
 
 		boolean onTop = iblockdata.c(up);
 		if (onTop) {
-			destroyChorus(map, player, destroyed.clone().add(0, 1, 0), 1);
-			return;
+			map.put(destroyed, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, destroyed, iblockdata, player)));
+			destroyChorus(map, player, destroyed.clone().add(BlockFace.UP), true);
 		}
 
-		if (direction == 0)
-			return; // 2x to the side?
+		if (!top)
+			return;
+
+		map.put(destroyed, BlockActionContext.destroy(iblockdata, Material.AIR, getDrops(null, destroyed, iblockdata, player)));
 
 		boolean onEast = iblockdata.c(east);
 		boolean onNorth = iblockdata.c(north);
 		boolean onSouth = iblockdata.c(south);
 		boolean onWest = iblockdata.c(west);
 		if (onEast)
-			destroyChorus(map, player, destroyed.clone().add(BlockFace.EAST), 0);
+			destroyChorus(map, player, destroyed.clone().add(BlockFace.EAST), false);
 		if (onNorth)
-			destroyChorus(map, player, destroyed.clone().add(BlockFace.NORTH), 0);
+			destroyChorus(map, player, destroyed.clone().add(BlockFace.NORTH), false);
 		if (onSouth)
-			destroyChorus(map, player, destroyed.clone().add(BlockFace.SOUTH), 0);
+			destroyChorus(map, player, destroyed.clone().add(BlockFace.SOUTH), false);
 		if (onWest)
-			destroyChorus(map, player, destroyed.clone().add(BlockFace.WEST), 0);
+			destroyChorus(map, player, destroyed.clone().add(BlockFace.WEST), false);
 	}
 
 	/**
-	 * @apiNote Fix nearby chorus fruit plant
+	 * @apiNote Disconnect connected chorus fruit plant
 	 */
-	private void updateChorusPlant(Map<Position, BlockActionContext> map, Position clone) {
-		// top?
-		clone.add(0, -1, 0);
-		IBlockData iblockdata = (IBlockData) clone.getIBlockData();
-		if (iblockdata.b() instanceof BlockChorusFruit) {
-			boolean on = iblockdata.c(up);
-			if (on) {
-				map.put(clone.clone(), BlockActionContext.updateState(iblockdata.a(up, false)));
-				return;
-			}
+	private void updateChorusPlant(Map<Position, BlockActionContext> map, Position clone, IBlockData destroyedFlower) {
+		// top
+		IBlockData update;
+		update = (IBlockData) clone.add(BlockFace.DOWN).getIBlockData();
+		if (update.getBukkitMaterial() == Material.CHORUS_PLANT && update.c(up)) {
+			map.put(clone, BlockActionContext.updateState(update.a(up, false)));
+			return;
 		}
-		// east?
-		clone.add(BlockFace.NORTH.getModX(), 0, BlockFace.NORTH.getModZ());
-		iblockdata = (IBlockData) clone.getIBlockData();
-		if (iblockdata.b() instanceof BlockChorusFruit) {
-			boolean on = iblockdata.c(east);
-			if (on) {
-				map.put(clone.clone(), BlockActionContext.updateState(iblockdata.a(east, false)));
-				return;
-			}
+		clone.remove(BlockFace.DOWN);
+		// east
+		update = (IBlockData) clone.add(BlockFace.WEST).getIBlockData();
+		if (update.getBukkitMaterial() == Material.CHORUS_PLANT && update.c(east)) {
+			map.put(clone, BlockActionContext.updateState(update.a(east, false)));
+			return;
 		}
-		// north?
-		clone.add(BlockFace.EAST.getModX(), 0, BlockFace.EAST.getModZ());
-		iblockdata = (IBlockData) clone.getIBlockData();
-		if (iblockdata.b() instanceof BlockChorusFruit) {
-			boolean on = iblockdata.c(north);
-			if (on) {
-				map.put(clone.clone(), BlockActionContext.updateState(iblockdata.a(north, false)));
-				return;
-			}
+		clone.remove(BlockFace.WEST);
+		// west
+		update = (IBlockData) clone.add(BlockFace.EAST).getIBlockData();
+		if (update.getBukkitMaterial() == Material.CHORUS_PLANT && update.c(west)) {
+			map.put(clone, BlockActionContext.updateState(update.a(west, false)));
+			return;
 		}
-		// west?
-		clone.add(BlockFace.SOUTH.getModX(), 0, BlockFace.SOUTH.getModZ());
-		iblockdata = (IBlockData) clone.getIBlockData();
-		if (iblockdata.b() instanceof BlockChorusFruit) {
-			boolean on = iblockdata.c(west);
-			if (on) {
-				map.put(clone.clone(), BlockActionContext.updateState(iblockdata.a(west, false)));
-				return;
-			}
+		clone.remove(BlockFace.EAST);
+		// north
+		update = (IBlockData) clone.add(BlockFace.SOUTH).getIBlockData();
+		if (update.getBukkitMaterial() == Material.CHORUS_PLANT && update.c(north)) {
+			map.put(clone, BlockActionContext.updateState(update.a(north, false)));
+			return;
 		}
-		// south?
-		clone.add(BlockFace.WEST.getModX(), 0, BlockFace.WEST.getModZ());
-		iblockdata = (IBlockData) clone.getIBlockData();
-		if (iblockdata.b() instanceof BlockChorusFruit) {
-			boolean on = iblockdata.c(south);
-			if (on)
-				map.put(clone.clone(), BlockActionContext.updateState(iblockdata.a(south, false)));
-		}
+		clone.remove(BlockFace.SOUTH);
+		// south
+		update = (IBlockData) clone.add(BlockFace.NORTH).getIBlockData();
+		if (update.getBukkitMaterial() == Material.CHORUS_PLANT && update.c(south))
+			map.put(clone, BlockActionContext.updateState(update.a(south, false)));
 	}
 
 	public static class ThreadAccessServerRandomSource implements BitRandomSource {
@@ -1788,16 +1818,5 @@ public class BlocksCalculator_v1_19_R1 {
 		public float i() {
 			return random.floatChance();
 		}
-	}
-
-	public AsyncBlockBreakEvent getBreak(long id) {
-		return breakEvent.get(id);
-	}
-
-	public AsyncBlockBreakEvent putBreak(long id, Integer[] result, Position initBlock, Map<Position, BlockActionContext> modifiedBlocks, Player player, BlockDataStorage blockData,
-			boolean instantlyBroken, BlockFace face) {
-		AsyncBlockBreakEvent event = new AsyncBlockBreakEvent(result, initBlock, modifiedBlocks, player, blockData, instantlyBroken, face);
-		breakEvent.put(id, event);
-		return event;
 	}
 }

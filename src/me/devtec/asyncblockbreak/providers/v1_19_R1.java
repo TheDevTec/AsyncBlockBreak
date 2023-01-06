@@ -32,7 +32,7 @@ import org.bukkit.inventory.ItemStack;
 
 import com.destroystokyo.paper.antixray.ChunkPacketBlockControllerAntiXray;
 
-import me.devtec.asyncblockbreak.Loader;
+import me.devtec.asyncblockbreak.Settings;
 import me.devtec.asyncblockbreak.api.LootTable;
 import me.devtec.asyncblockbreak.events.AsyncBlockBreakEvent;
 import me.devtec.asyncblockbreak.events.AsyncBlockDropItemEvent;
@@ -117,7 +117,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			Item hand = nmsPlayer.fA().f().c();
 
 			if (player.getGameMode() == GameMode.CREATIVE) {
-				if (cannotBeDestroyed(iblockdata.getBukkitMaterial(), true) || isInvalid(player, pos) || !Loader.ALLOW_BREAKING_WITH_SWORD && hand instanceof ItemSword) {
+				if (cannotBeDestroyed(iblockdata.getBukkitMaterial(), true) || isInvalid(player, pos) || !Settings.Gameplay.BREAKING_WITH_SWORD && hand instanceof ItemSword) {
 					sendCancelPackets(packet, player, blockPos, iblockdata);
 					return true;
 				}
@@ -125,8 +125,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				return true;
 			}
 			// iblockdata.a(nmsPlayer.s, blockPos, nmsPlayer); // hit block
-			float f = getDamageOfBlock(iblockdata, nmsPlayer, nmsPlayer.s, blockPos); // get damage
-			if (f >= 1.0F) {
+			float damage = getDamageOfBlock(iblockdata, nmsPlayer, nmsPlayer.s, blockPos); // get damage
+			if (damage >= 1.0F) {
 				if (cannotBeDestroyed(iblockdata.getBukkitMaterial(), false) || isInvalid(player, pos)) {
 					sendCancelPackets(packet, player, blockPos, iblockdata);
 					return true;
@@ -146,7 +146,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		case WATER:
 		case LAVA:
 		case BUBBLE_COLUMN:
-			return false;
+			return true;
 		case BARRIER:
 		case LIGHT:
 		case BEDROCK:
@@ -158,9 +158,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		case END_PORTAL_FRAME:
 		case END_PORTAL:
 		case NETHER_PORTAL:
-			if (creative)
-				return true;
-			return false;
+			return !creative;
 		default:
 			break;
 		}
@@ -182,30 +180,18 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	private void processBlockBreak(PacketPlayInBlockDig packet, Player player, EntityPlayer nmsPlayer, IBlockData iblockdata, BlockPosition blockPos, Position pos, boolean dropItems,
 			boolean instantlyBroken) {
 
-		long threadId = Thread.currentThread().getId();
-		AsyncBlockBreakEvent cachedEvent = calculator.getBreak(threadId);
-		AsyncBlockBreakEvent event;
-		if (cachedEvent == null)
-			event = calculator.putBreak(threadId, new Integer[] { 0 }, pos, calculateChangedBlocks(pos, player), player,
-					BukkitLoader.getNmsProvider().toMaterial(iblockdata)
-							.setNBT(iblockdata.b() instanceof ITileEntity ? BukkitLoader.getNmsProvider().getNBTOfTile(pos.getNMSChunk(), pos.getBlockX(), pos.getBlockY(), pos.getBlockZ()) : null),
-					instantlyBroken, BlockFace.valueOf(packet.c().name()));
-		else {
-			event = cachedEvent;
-			event.getModifiedBlocks().clear();
-			event.replaceEventStatement(pos, calculateChangedBlocks(event.getModifiedBlocks(), pos, player, ((CraftPlayer) player).getHandle().fA().f()), player,
-					BukkitLoader.getNmsProvider().toMaterial(iblockdata)
-							.setNBT(iblockdata.b() instanceof ITileEntity ? BukkitLoader.getNmsProvider().getNBTOfTile(pos.getNMSChunk(), pos.getBlockX(), pos.getBlockY(), pos.getBlockZ()) : null),
-					instantlyBroken, BlockFace.valueOf(packet.c().name()));
-		}
+		AsyncBlockBreakEvent event = new AsyncBlockBreakEvent(new Integer[] { 0 }, pos, calculateChangedBlocks(pos, player), player,
+				BukkitLoader.getNmsProvider().toMaterial(iblockdata)
+						.setNBT(iblockdata.b() instanceof ITileEntity ? BukkitLoader.getNmsProvider().getNBTOfTile(pos.getNMSChunk(), pos.getBlockX(), pos.getBlockY(), pos.getBlockZ()) : null),
+				instantlyBroken, BlockFace.valueOf(packet.c().name()));
 		event.setDropItems(dropItems);
 		if (player.getGameMode() == GameMode.CREATIVE)
-			event.setTileDrops(!Loader.DISABLE_TILE_DROPS);
+			event.setTileDrops(!Settings.Performance.DISABLE_TILE_DROPS);
 
 		if (instantlyBroken) {
 			PlayerInteractEvent interactEvent = new PlayerInteractEvent(player, Action.LEFT_CLICK_BLOCK, player.getItemInHand(), pos.getBlock(), event.getBlockFace());
 			if (PlayerInteractEvent.getHandlerList().getRegisteredListeners().length > 0) {
-				if (Loader.SYNC_EVENT) {
+				if (Settings.Plugins.SYNC_EVENT) {
 					BukkitLoader.getNmsProvider().postToMainThread(() -> {
 						Bukkit.getPluginManager().callEvent(interactEvent);
 						if (interactEvent.isCancelled() || interactEvent.useInteractedBlock() == Result.DENY) {
@@ -254,7 +240,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			return;
 		}
 
-		if (Loader.SYNC_EVENT)
+		if (Settings.Plugins.SYNC_EVENT)
 			BukkitLoader.getNmsProvider().postToMainThread(() -> {
 				if (event.isAsynchronous())
 					Ref.set(event, async, false);
@@ -338,7 +324,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 		physics.add(pos);
 
 		for (Entry<Position, BlockActionContext> modifyBlock : breakEvent.getModifiedBlocks().entrySet()) {
-			if (modifyBlock.getValue().shouldUpdatePhysics())
+			if (Settings.Performance.TICK_NEARBY_BLOCKS && modifyBlock.getValue().shouldUpdatePhysics())
 				physics.add(modifyBlock.getKey());
 			if (breakEvent.isDropItems() && modifyBlock.getValue().getLoot() != null)
 				for (ItemStack stack : modifyBlock.getValue().getLoot())

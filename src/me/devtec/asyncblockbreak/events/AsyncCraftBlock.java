@@ -48,16 +48,8 @@ public class AsyncCraftBlock extends CraftBlock {
 		this.event = event;
 	}
 
-	public AsyncCraftBlock updateEvent(Position initBlock, BlockActionContext main, BlockDataStorage blockData) {
-		if (!initBlock.getWorldName().equals(getWorld().getName()))
-			Ref.set(this, worldField, ((CraftWorld) initBlock.getWorld()).getHandle()); // Modify only if needed
-		Ref.set(this, positionField, ((BlockPosition) initBlock.getBlockPosition()).h()); // Position always change (probably)
-		this.main = main;
-		this.blockData = blockData;
-
-		data = (IBlockData) blockData.getIBlockData() == null ? CraftMagicNumbers.getBlock(blockData.getType()).m() : (IBlockData) blockData.getIBlockData();
-		type = blockData.getType();
-		return this;
+	public AsyncBlockBreakEvent getEvent() {
+		return event;
 	}
 
 	@Override

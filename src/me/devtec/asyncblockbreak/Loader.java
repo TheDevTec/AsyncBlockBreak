@@ -20,17 +20,6 @@ import me.devtec.shared.scheduler.Tasker;
 import me.devtec.theapi.bukkit.packetlistener.PacketListener;
 
 public class Loader extends JavaPlugin implements Listener {
-	public static boolean DISABLE_TILE_DROPS;
-	public static int DESTROYED_BLOCKS_LIMIT;
-	public static double MAXIMUM_RADIUS_WITHIN_BLOCK_AND_PLAYER;
-	public static boolean SYNC_EVENT;
-	public static boolean KICK_PLAYER;
-	public static boolean BROADCAST_CONSOLE;
-	public static boolean BROADCAST_ADMINS;
-	public static boolean TICK_LEAVES;
-	public static boolean LADDER_WORKS_AS_VINE;
-	public static boolean ALLOW_BREAKING_WITH_SWORD;
-
 	public static Map<UUID, Integer> destroyedCountInTick = new ConcurrentHashMap<>();
 	public static List<UUID> kick = new ArrayList<>();
 	private BlockDestroyHandler handler;
@@ -47,7 +36,7 @@ public class Loader extends JavaPlugin implements Listener {
 
 		initProvider();
 
-		if (KICK_PLAYER)
+		if (Settings.AntiCheat.ACTION_KICK_PLAYER)
 			Bukkit.getPluginManager().registerEvents(this, this);
 
 		new Tasker() {
@@ -85,19 +74,23 @@ public class Loader extends JavaPlugin implements Listener {
 
 	private void initConfig() {
 		Config config = Config.loadFromPlugin(getClass(), "config.yml", "plugins/AsyncBlockBreak/config.yml").save(DataType.YAML);
-		// settings
-		SYNC_EVENT = config.getBoolean("settings.syncEvent");
-		DISABLE_TILE_DROPS = config.getBoolean("settings.disable_tile_drops");
-		// anticheat
-		DESTROYED_BLOCKS_LIMIT = config.getInt("anticheat.destroyed_blocks_limit");
-		MAXIMUM_RADIUS_WITHIN_BLOCK_AND_PLAYER = config.getDouble("anticheat.max_radius_within_block_and_player");
-		// anticheat actions
-		KICK_PLAYER = config.getBoolean("anticheat.actions.kick_player");
-		BROADCAST_CONSOLE = config.getBoolean("anticheat.actions.broadcast_console");
-		BROADCAST_ADMINS = config.getBoolean("anticheat.actions.broadcast_admins");
-		TICK_LEAVES = config.getBoolean("settings.tick_leaves");
-		LADDER_WORKS_AS_VINE = config.getBoolean("settings.ladder_works_as_vine");
-		ALLOW_BREAKING_WITH_SWORD = config.getBoolean("settings.breaking_with_sword");
+		// AntiCheat
+		Settings.AntiCheat.ACTION_KICK_PLAYER = config.getBoolean("anticheat.actions.kick_player");
+		Settings.AntiCheat.ACTION_BROADCAST_CONSOLE = config.getBoolean("anticheat.actions.broadcast_console");
+		Settings.AntiCheat.ACTION_BROADCAST_ADMINS = config.getBoolean("anticheat.actions.broadcast_admins");
+		Settings.AntiCheat.DESTROYED_BLOCKS_LIMIT = config.getInt("anticheat.destroyed_blocks_limit");
+		Settings.AntiCheat.MAXIMUM_RADIUS_WITHIN_BLOCK_AND_PLAYER = config.getInt("anticheat.max_radius_within_block_and_player");
+		// Plugins
+		Settings.Plugins.SYNC_EVENT = config.getBoolean("settings.plugins.syncEvent");
+		// Performance
+		Settings.Performance.CHORUS_PLANT = config.getBoolean("settings.performance.chorus_plant");
+		Settings.Performance.CONNECTED_BLOCKS = config.getBoolean("settings.performance.connected_blocks");
+		Settings.Performance.TICK_LEAVES = config.getBoolean("settings.performance.tick_leaves");
+		Settings.Performance.TICK_NEARBY_BLOCKS = config.getBoolean("settings.performance.tick_nearby_blocks");
+		Settings.Performance.DISABLE_TILE_DROPS = config.getBoolean("settings.performance.disable_tile_drops");
+		// Gameplay
+		Settings.Gameplay.BREAKING_WITH_SWORD = config.getBoolean("settings.gameplay.breaking_with_sword");
+		Settings.Gameplay.LADDER_WORKS_AS_VINE = config.getBoolean("settings.gameplay.ladder_works_as_vine");
 	}
 
 	@Override

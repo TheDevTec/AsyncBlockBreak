@@ -1,20 +1,36 @@
 settings:
-  # Disable drops from tile entities in the Creative mode (Chests, Hoppers..)
-  disable_tile_drops: false
-  # Sync BlockBreakEvent event with server to support other plugins
-  syncEvent: true
-  # If you disable this, all leaves will be persistent
-  tick_leaves: true
-  # Should ladder works same as vines?
-  # Look at: https://imgur.com/a/UGGnaRb
-  ladder_works_as_vine: false
-  # Allow breaking blocks in creative mode with sword
-  # This is defaulty disabled in the vanilla
-  breaking_with_sword: false
-
+  # Gameplay settings which can change how game works
+  gameplay:
+    # Allow breaking blocks in creative mode with sword
+    # This is defaulty disabled in the vanilla
+    breaking_with_sword: false
+    # Should ladder works same as vines?
+    # Look at: https://imgur.com/a/UGGnaRb
+    ladder_works_as_vine: false
+  
+  # Small performance tweaks
+  performance:
+    # Chorus plant updating when destroyed connected plants
+    chorus_plant: true
+    # Updating of connected blocks (Stairs, glass panes, iron bars, etc.)
+    # Can cause visual problems, We recommend leaving it on
+    connected_blocks: true
+    # Ticking of leaves
+    tick_leaves: true
+    # Block ticking
+    # Tick nearby blocks - water, lava, gravel, sand...
+    tick_nearby_blocks: true
+    # Disable drops from tile entities in the Creative mode (Chests, Hoppers..)
+    disable_tile_drops: false
+    
+  # Settings about plugin events, compatibility with other plugins, etc.
+  plugins:
+    # Sync BlockBreakEvent, PlayerInteractEvent & PlayerItemDamageEvent events with server to support other plugins
+    syncEvent: true
+  
+# AntiNuke settings & invalid breaking
 anticheat:
-  # AntiCheat - Anti Nuke protection
-  # Maximum blocks destroyed in one tick
+  # Maximum blocks destroyed in one server tick (20 ticks = 1s)
   destroyed_blocks_limit: 3
   # Maximum radius within player and block
   max_radius_within_block_and_player: 6.4

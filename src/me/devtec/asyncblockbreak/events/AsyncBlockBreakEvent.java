@@ -93,18 +93,4 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 	public void setFinished() {
 		result[0] = 1;
 	}
-
-	public void replaceEventStatement(Position initBlock, Map<Position, BlockActionContext> modifiedBlocks, Player player, BlockDataStorage blockData, boolean instantlyBroken, BlockFace face) {
-		setDropItems(true);
-		setCancelled(false);
-		setExpToDrop(0);
-		consumer = null;
-		result[0] = 0;
-		this.blockData = blockData;
-		isInstant = instantlyBroken;
-		pos = initBlock;
-		this.modifiedBlocks = modifiedBlocks;
-		this.face = face;
-		((AsyncCraftBlock) getBlock()).updateEvent(initBlock, modifiedBlocks.get(initBlock), blockData);
-	}
 }

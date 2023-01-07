@@ -1233,6 +1233,7 @@ public class BlocksCalculator_v1_19_R1 {
 		case KELP:
 		case KELP_PLANT:
 		case SCAFFOLDING:
+		case CACTUS:
 			return true;
 		default:
 			break;

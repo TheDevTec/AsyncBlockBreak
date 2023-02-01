@@ -5,6 +5,8 @@ public class Settings {
 	public class Gameplay {
 		public static boolean LADDER_WORKS_AS_VINE;
 		public static boolean BREAKING_WITH_SWORD;
+		public static boolean STACK_DROPS_INSTANTLY;
+		public static boolean STACK_EXPS_INSTATNTLY;
 	}
 
 	public class Performance {
@@ -13,6 +15,8 @@ public class Settings {
 		public static boolean TICK_LEAVES;
 		public static boolean TICK_NEARBY_BLOCKS;
 		public static boolean DISABLE_TILE_DROPS;
+		public static boolean CAN_DESTROY_ADVENTURE_FUNCTION;
+		public static boolean CAN_DESTROY_ONLY_IN_ADVENTURE;
 	}
 
 	public class Plugins {

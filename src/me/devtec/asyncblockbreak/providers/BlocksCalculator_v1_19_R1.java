@@ -1234,6 +1234,8 @@ public class BlocksCalculator_v1_19_R1 {
 		case KELP_PLANT:
 		case SCAFFOLDING:
 		case CACTUS:
+		case BIG_DRIPLEAF:
+		case BIG_DRIPLEAF_STEM:
 			return true;
 		default:
 			break;
@@ -1282,6 +1284,8 @@ public class BlocksCalculator_v1_19_R1 {
 		case WEEPING_VINES_PLANT:
 		case CAVE_VINES:
 		case CAVE_VINES_PLANT:
+		case BIG_DRIPLEAF:
+		case BIG_DRIPLEAF_STEM:
 			return true;
 		default:
 			break;
@@ -1497,6 +1501,7 @@ public class BlocksCalculator_v1_19_R1 {
 		case OAK_DOOR:
 		case SPRUCE_DOOR:
 		case WARPED_DOOR:
+		case SMALL_DRIPLEAF:
 			return true;
 		default:
 			break;
@@ -1509,6 +1514,7 @@ public class BlocksCalculator_v1_19_R1 {
 			destroyed = destroyed.clone().add(0, 1, 0);
 		else
 			destroyed = destroyed.clone().add(0, -1, 0);
+		iblockdata = (IBlockData) destroyed.getIBlockData();
 		map.put(destroyed, BlockActionContext.destroy(iblockdata, isWaterlogged(iblockdata),
 				iblockdata.c(doubleHalf) != BlockPropertyDoubleBlockHalf.b ? getDrops(null, destroyed, (IBlockData) destroyed.getIBlockData(), player) : Collections.emptyList()));
 	}

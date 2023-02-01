@@ -7,6 +7,11 @@ settings:
     # Should ladder works same as vines?
     # Look at: https://imgur.com/a/UGGnaRb
     ladder_works_as_vine: false
+    
+    # This option can greatly improve performance in some situations,
+    # but breaks compatibility with "stacker" plugins like UltimateStacker bcs isn't calling "ItemSpawnEvent" event
+    stack_instantly_without_dropping_item: false
+    stack_instantly_exps_without_spawning_orb: false
   
   # Small performance tweaks
   performance:
@@ -22,6 +27,11 @@ settings:
     tick_nearby_blocks: true
     # Disable drops from tile entities in the Creative mode (Chests, Hoppers..)
     disable_tile_drops: false
+    # Enable gamemode adventure "can destroy" blocks function
+    # Disable this if you are not using these tags on the items (Can save some CPU usage - lookups)
+    can_destroy_adventure_function: true
+    # Should these tags only be lookup when the player is in adventure mode?
+    can_destroy_only_in_adventure_function: true
     
   # Settings about plugin events, compatibility with other plugins, etc.
   plugins:

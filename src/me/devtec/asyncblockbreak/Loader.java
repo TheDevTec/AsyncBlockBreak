@@ -88,9 +88,13 @@ public class Loader extends JavaPlugin implements Listener {
 		Settings.Performance.TICK_LEAVES = config.getBoolean("settings.performance.tick_leaves");
 		Settings.Performance.TICK_NEARBY_BLOCKS = config.getBoolean("settings.performance.tick_nearby_blocks");
 		Settings.Performance.DISABLE_TILE_DROPS = config.getBoolean("settings.performance.disable_tile_drops");
+		Settings.Performance.CAN_DESTROY_ADVENTURE_FUNCTION = config.getBoolean("settings.performance.can_destroy_adventure_function");
+		Settings.Performance.CAN_DESTROY_ONLY_IN_ADVENTURE = config.getBoolean("settings.performance.can_destroy_only_in_adventure_function");
 		// Gameplay
 		Settings.Gameplay.BREAKING_WITH_SWORD = config.getBoolean("settings.gameplay.breaking_with_sword");
 		Settings.Gameplay.LADDER_WORKS_AS_VINE = config.getBoolean("settings.gameplay.ladder_works_as_vine");
+		Settings.Gameplay.STACK_DROPS_INSTANTLY = config.getBoolean("settings.gameplay.stack_instantly_without_dropping_item");
+		Settings.Gameplay.STACK_EXPS_INSTATNTLY = config.getBoolean("settings.gameplay.stack_instantly_exps_without_spawning_orb");
 	}
 
 	@Override

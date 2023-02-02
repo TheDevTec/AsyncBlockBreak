@@ -438,7 +438,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 						if (newSize <= item.getMaxStackSize()) {
 							itemStack.setAmount(newSize);
 							dropped.a(CraftItemStack.asNMSCopy(itemStack));
-							itemConsumer.accept((org.bukkit.entity.Item) dropped.getBukkitEntity());
+							if (itemConsumer != null)
+								itemConsumer.accept((org.bukkit.entity.Item) dropped.getBukkitEntity());
 							continue;
 						}
 						itemStack.setAmount(item.getMaxStackSize());

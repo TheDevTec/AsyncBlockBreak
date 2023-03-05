@@ -65,6 +65,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityExperienceOrb;
 import net.minecraft.world.entity.item.EntityFallingBlock;
 import net.minecraft.world.entity.item.EntityItem;
+import net.minecraft.world.item.ItemDebugStick;
 import net.minecraft.world.item.ItemSword;
 import net.minecraft.world.item.enchantment.EnchantmentManager;
 import net.minecraft.world.item.enchantment.Enchantments;
@@ -113,6 +114,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			IBlockData iblockdata = (IBlockData) pos.getIBlockData();
 			EntityPlayer nmsPlayer = ((CraftPlayer) player).getHandle();
 			net.minecraft.world.item.ItemStack hand = nmsPlayer.fA().f();
+			if (hand.c() instanceof ItemDebugStick)
+				return false;
 
 			if (cannotBeDestroyed(hand, iblockdata.getBukkitMaterial(), player.getGameMode()) || isInvalid(player, pos)) {
 				sendCancelPackets(packet, player, blockPos, iblockdata);
@@ -129,6 +132,8 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			IBlockData iblockdata = (IBlockData) pos.getIBlockData();
 			EntityPlayer nmsPlayer = ((CraftPlayer) player).getHandle();
 			net.minecraft.world.item.ItemStack hand = nmsPlayer.fA().f();
+			if (hand.c() instanceof ItemDebugStick)
+				return false;
 
 			if (player.getGameMode() == GameMode.CREATIVE) {
 				if (cannotBeDestroyed(hand, iblockdata.getBukkitMaterial(), player.getGameMode()) || isInvalid(player, pos)
@@ -139,7 +144,6 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				processBlockBreak(packet, player, hand, nmsPlayer, iblockdata, blockPos, pos, false, true);
 				return true;
 			}
-			// iblockdata.a(nmsPlayer.s, blockPos, nmsPlayer); // hit block
 			float damage = getDamageOfBlock(iblockdata, nmsPlayer, nmsPlayer.s, blockPos); // get damage
 			if (damage >= 1.0F) {
 				if (cannotBeDestroyed(hand, iblockdata.getBukkitMaterial(), player.getGameMode()) || isInvalid(player, pos)) {

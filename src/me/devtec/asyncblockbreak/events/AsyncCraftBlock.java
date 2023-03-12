@@ -1,6 +1,5 @@
 package me.devtec.asyncblockbreak.events;
 
-import java.lang.reflect.Field;
 import java.util.Collection;
 
 import org.bukkit.Material;
@@ -13,7 +12,6 @@ import org.bukkit.entity.Entity;
 import org.bukkit.inventory.ItemStack;
 
 import me.devtec.asyncblockbreak.utils.BlockActionContext;
-import me.devtec.shared.Ref;
 import me.devtec.theapi.bukkit.game.BlockDataStorage;
 import me.devtec.theapi.bukkit.game.Position;
 import net.minecraft.core.BlockPosition;
@@ -21,8 +19,6 @@ import net.minecraft.world.level.GeneratorAccess;
 import net.minecraft.world.level.block.state.IBlockData;
 
 public class AsyncCraftBlock extends CraftBlock {
-
-	static Field worldField = Ref.field(CraftBlock.class, "world"), positionField = Ref.field(CraftBlock.class, "position");
 
 	BlockActionContext main;
 	BlockDataStorage blockData;
@@ -54,7 +50,7 @@ public class AsyncCraftBlock extends CraftBlock {
 
 	@Override
 	public IBlockData getNMS() {
-		return event.result[0] == 1 ? getCraftWorld().getHandle().a_(getPosition()) : data;
+		return event.isCompleted() ? getCraftWorld().getHandle().a_(getPosition()) : data;
 	}
 
 	@Override
@@ -64,12 +60,12 @@ public class AsyncCraftBlock extends CraftBlock {
 
 	@Override
 	public Material getType() {
-		return event.result[0] == 1 ? getCraftWorld().getHandle().a_(getPosition()).getBukkitMaterial() : type;
+		return event.isCompleted() ? getCraftWorld().getHandle().a_(getPosition()).getBukkitMaterial() : type;
 	}
 
 	@Override
 	public void setType(Material type, boolean applyPhysics) {
-		if (event.result[0] == 1) {
+		if (event.isCompleted()) {
 			this.setBlockData(type.createBlockData(), applyPhysics);
 			return;
 		}
@@ -82,7 +78,7 @@ public class AsyncCraftBlock extends CraftBlock {
 
 	@Override
 	public void setBlockData(BlockData data, boolean applyPhysics) {
-		if (event.result[0] == 1) {
+		if (event.isCompleted()) {
 			CraftBlock.setTypeAndData(getCraftWorld().getHandle(), getPosition(), getNMS(), ((CraftBlockData) data).getState(), applyPhysics);
 			return;
 		}
@@ -96,7 +92,7 @@ public class AsyncCraftBlock extends CraftBlock {
 
 	@Override
 	public void setData(byte data, boolean applyPhysics) {
-		if (event.result[0] == 1) {
+		if (event.isCompleted()) {
 			getCraftWorld().getHandle().a(getPosition(), CraftMagicNumbers.getBlock(getType(), data), applyPhysics ? 3 : 2);
 			return;
 		}
@@ -107,6 +103,6 @@ public class AsyncCraftBlock extends CraftBlock {
 
 	@Override
 	public Collection<ItemStack> getDrops(ItemStack item, Entity entity) {
-		return event.result[0] == 1 ? super.getDrops(item, entity) : main.getLoot();
+		return event.isCompleted() ? super.getDrops(item, entity) : main.getLoot();
 	}
 }

@@ -22,13 +22,11 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 	private LootTable loot;
 	private Position pos;
 	private Map<Position, BlockActionContext> modifiedBlocks;
-	protected final Integer[] result;
+	protected boolean isCompleted;
 
-	public AsyncBlockBreakEvent(Integer[] result, Position initBlock, Map<Position, BlockActionContext> modifiedBlocks, Player player, BlockDataStorage blockData, boolean instantlyBroken,
-			BlockFace face) {
+	public AsyncBlockBreakEvent(Position initBlock, Map<Position, BlockActionContext> modifiedBlocks, Player player, BlockDataStorage blockData, boolean instantlyBroken, BlockFace face) {
 		super(new AsyncCraftBlock(initBlock, modifiedBlocks.get(initBlock), blockData), player);
 		((AsyncCraftBlock) getBlock()).setEvent(this);
-		this.result = result;
 		this.blockData = blockData;
 		isInstant = instantlyBroken;
 		pos = initBlock;
@@ -90,7 +88,11 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 		this.consumer = consumer;
 	}
 
-	public void setFinished() {
-		result[0] = 1;
+	public void setCompleted() {
+		isCompleted = true;
+	}
+
+	public boolean isCompleted() {
+		return isCompleted;
 	}
 }

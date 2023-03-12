@@ -222,7 +222,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 	private void processBlockBreak(PacketPlayInBlockDig packet, Player player, net.minecraft.world.item.ItemStack hand, EntityPlayer nmsPlayer, IBlockData iblockdata, BlockPosition blockPos,
 			Position pos, boolean dropItems, boolean instantlyBroken) {
 
-		AsyncBlockBreakEvent event = new AsyncBlockBreakEvent(new Integer[] { 0 }, pos, calculateChangedBlocks(pos, player), player,
+		AsyncBlockBreakEvent event = new AsyncBlockBreakEvent(pos, calculateChangedBlocks(pos, player), player,
 				BukkitLoader.getNmsProvider().toMaterial(iblockdata)
 						.setNBT(iblockdata.b() instanceof ITileEntity ? BukkitLoader.getNmsProvider().getNBTOfTile(pos.getNMSChunk(), pos.getBlockX(), pos.getBlockY(), pos.getBlockZ()) : null),
 				instantlyBroken, BlockFace.valueOf(packet.c().name()));
@@ -251,7 +251,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 							return;
 						}
 						Bukkit.getPluginManager().callEvent(event);
-						event.setFinished();
+						event.setCompleted();
 						if (event.isCancelled()) {
 							sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
 							return;
@@ -262,7 +262,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				}
 				Ref.set(interactEvent, async, true);
 				Bukkit.getPluginManager().callEvent(interactEvent);
-				if (event.isCancelled()) {
+				if (interactEvent.isCancelled() || interactEvent.useInteractedBlock() == Result.DENY) {
 					sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
 					return;
 				}
@@ -284,7 +284,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 				if (event.isAsynchronous())
 					Ref.set(event, async, false);
 				Bukkit.getPluginManager().callEvent(event);
-				event.setFinished();
+				event.setCompleted();
 				if (event.isCancelled()) {
 					sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
 					return;
@@ -295,7 +295,7 @@ public class v1_19_R1 implements BlockDestroyHandler {
 			if (!event.isAsynchronous())
 				Ref.set(event, async, true);
 			Bukkit.getPluginManager().callEvent(event);
-			event.setFinished();
+			event.setCompleted();
 			if (event.isCancelled()) {
 				sendCancelPackets(packet, player, blockPos, (IBlockData) event.getBlockData().getIBlockData());
 				return;

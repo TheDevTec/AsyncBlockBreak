@@ -59,6 +59,7 @@ import net.minecraft.world.level.block.state.properties.BlockPropertyWallHeight;
 import net.minecraft.world.level.block.state.properties.DripstoneThickness;
 import net.minecraft.world.level.block.state.properties.IBlockState;
 import net.minecraft.world.level.chunk.Chunk;
+import net.minecraft.world.level.chunk.Chunk.EnumTileEntityState;
 import net.minecraft.world.level.levelgen.BitRandomSource;
 import net.minecraft.world.level.levelgen.LegacyRandomSource;
 import net.minecraft.world.level.levelgen.PositionalRandomFactory;
@@ -1208,7 +1209,7 @@ public class BlocksCalculator_v1_19_R1 {
 			BlockPosition position = (BlockPosition) pos.getBlockPosition();
 
 			Builder loottableinfo_builder = new Builder(world).a(SINGLE_THREAD_RANDOM_SOURCE).a(LootContextParameters.f, Vec3D.a(position)).a(LootContextParameters.i, nms == null ? ItemStack.b : nms)
-					.b(LootContextParameters.a, entity == null ? null : ((CraftEntity) entity).getHandle()).b(LootContextParameters.h, ((Chunk) pos.getNMSChunk()).getTileEntityImmediately(position));
+					.b(LootContextParameters.a, entity == null ? null : ((CraftEntity) entity).getHandle()).b(LootContextParameters.h, ((Chunk) pos.getNMSChunk()).a(position, EnumTileEntityState.a));
 			List<ItemStack> drops = iblockdata.a(loottableinfo_builder);
 			if (drops.isEmpty())
 				return Collections.emptyList();
@@ -1532,7 +1533,7 @@ public class BlocksCalculator_v1_19_R1 {
 
 	private void destroyContainerTile(Map<Position, BlockActionContext> map, Player player, Position destroyed, IBlockData iblockdata) {
 		// Items
-		TileEntity container = ((Chunk) destroyed.getNMSChunk()).getTileEntityImmediately((BlockPosition) destroyed.getBlockPosition());
+		TileEntity container = ((Chunk) destroyed.getNMSChunk()).a((BlockPosition) destroyed.getBlockPosition(), EnumTileEntityState.a);
 		if (container == null)
 			return;
 		if (container instanceof TileEntityLectern lectern) {

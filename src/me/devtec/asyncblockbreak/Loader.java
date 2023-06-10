@@ -73,7 +73,6 @@ public class Loader extends JavaPlugin implements Listener {
 
 	private void initProvider() {
 		handler = (BlockDestroyHandler) Ref.newInstanceByClass("me.devtec.asyncblockbreak.providers.nms." + Ref.serverVersion());
-		System.out.println(handler.getClass().getName());
 	}
 
 	private void initConfig() {

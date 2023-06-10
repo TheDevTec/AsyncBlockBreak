@@ -10,9 +10,11 @@ import org.bukkit.entity.Player;
 
 import me.devtec.asyncblockbreak.Loader;
 import me.devtec.asyncblockbreak.Settings;
+import me.devtec.asyncblockbreak.events.AsyncCraftBlock;
 import me.devtec.shared.Ref;
 import me.devtec.shared.components.Component;
 import me.devtec.theapi.bukkit.BukkitLoader;
+import me.devtec.theapi.bukkit.game.BlockDataStorage;
 import me.devtec.theapi.bukkit.game.Position;
 
 public interface BlockDestroyHandler {
@@ -20,6 +22,8 @@ public interface BlockDestroyHandler {
 	static Constructor<?> packetDisconnect = Ref.constructor(Ref.nms("network.protocol.game", "PacketPlayOutKickDisconnect"), Ref.nms("network.chat", "IChatBaseComponent"));
 
 	boolean handle(String player, Object packet);
+
+	AsyncCraftBlock generateBlock(Position initBlock, BlockActionContext main, BlockDataStorage blockData);
 
 	default boolean isInvalid(Player player, Position pos) {
 		return !player.isOnline() || !player.isValid() || player.isDead() || player.getHealth() <= 0 || player.getGameMode() == GameMode.SPECTATOR || Settings.AntiCheat.ACTION_KICK_PLAYER

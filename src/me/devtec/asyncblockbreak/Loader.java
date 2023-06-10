@@ -12,8 +12,9 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import me.devtec.asyncblockbreak.providers.v1_19_R1;
+import me.devtec.asyncblockbreak.events.AsyncBlockBreakEvent;
 import me.devtec.asyncblockbreak.utils.BlockDestroyHandler;
+import me.devtec.shared.Ref;
 import me.devtec.shared.dataholder.Config;
 import me.devtec.shared.dataholder.DataType;
 import me.devtec.shared.scheduler.Tasker;
@@ -22,12 +23,17 @@ import me.devtec.theapi.bukkit.packetlistener.PacketListener;
 public class Loader extends JavaPlugin implements Listener {
 	public static Map<UUID, Integer> destroyedCountInTick = new ConcurrentHashMap<>();
 	public static List<UUID> kick = new ArrayList<>();
-	private BlockDestroyHandler handler;
+	public static BlockDestroyHandler handler;
 	private PacketListener listener;
 
 	@EventHandler
 	public void quit(PlayerQuitEvent e) {
 		kick.remove(e.getPlayer().getUniqueId());
+	}
+
+	@EventHandler
+	public void onBreak(AsyncBlockBreakEvent e) {
+		e.setCancelled(true);
 	}
 
 	@Override
@@ -66,10 +72,8 @@ public class Loader extends JavaPlugin implements Listener {
 	}
 
 	private void initProvider() {
-		// handler = (BlockDestroyHandler)
-		// Ref.newInstanceByClass("me.devtec.asyncblockbreak.providers." +
-		// Ref.serverVersion());
-		handler = new v1_19_R1();
+		handler = (BlockDestroyHandler) Ref.newInstanceByClass("me.devtec.asyncblockbreak.providers.nms." + Ref.serverVersion());
+		System.out.println(handler.getClass().getName());
 	}
 
 	private void initConfig() {

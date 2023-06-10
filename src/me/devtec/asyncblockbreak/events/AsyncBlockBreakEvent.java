@@ -8,6 +8,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.util.Consumer;
 
+import me.devtec.asyncblockbreak.Loader;
 import me.devtec.asyncblockbreak.api.LootTable;
 import me.devtec.asyncblockbreak.utils.BlockActionContext;
 import me.devtec.theapi.bukkit.game.BlockDataStorage;
@@ -25,7 +26,7 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 	protected boolean isCompleted;
 
 	public AsyncBlockBreakEvent(Position initBlock, Map<Position, BlockActionContext> modifiedBlocks, Player player, BlockDataStorage blockData, boolean instantlyBroken, BlockFace face) {
-		super(new AsyncCraftBlock(initBlock, modifiedBlocks.get(initBlock), blockData), player);
+		super(Loader.handler.generateBlock(initBlock, modifiedBlocks.get(initBlock), blockData), player);
 		((AsyncCraftBlock) getBlock()).setEvent(this);
 		this.blockData = blockData;
 		isInstant = instantlyBroken;

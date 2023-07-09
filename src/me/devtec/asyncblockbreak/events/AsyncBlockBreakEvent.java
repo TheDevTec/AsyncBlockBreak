@@ -91,6 +91,7 @@ public class AsyncBlockBreakEvent extends BlockBreakEvent {
 
 	public void setCompleted() {
 		isCompleted = true;
+		getModifiedBlocks().forEach((pos, block) -> block.processBreakingLootCheck(pos));
 	}
 
 	public boolean isCompleted() {

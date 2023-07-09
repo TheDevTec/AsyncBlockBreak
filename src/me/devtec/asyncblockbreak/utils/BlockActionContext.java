@@ -8,9 +8,11 @@ import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 
 import me.devtec.theapi.bukkit.game.BlockDataStorage;
+import me.devtec.theapi.bukkit.game.Position;
 
 public class BlockActionContext {
 	private boolean destroy;
+	private Material original;
 	private Material newType;
 	private Object iblockdata;
 	private Object destroyedIblockdata;
@@ -20,39 +22,39 @@ public class BlockActionContext {
 	private List<ItemStack> loot;
 	private List<ItemStack> tileloot;
 
-	private BlockActionContext(boolean destroy, Material newType) {
+	private BlockActionContext(boolean destroy, Material original, Material newType, boolean tick) {
 		this.destroy = destroy;
 		this.newType = newType;
+		this.original = original;
+		updatePhysics = tick;
 	}
 
-	public static BlockActionContext destroy(Object destroyed, Material newType, List<ItemStack> loot) {
-		BlockActionContext action = new BlockActionContext(true, newType);
+	public static BlockActionContext destroy(Object destroyed, Material original, Material newType, List<ItemStack> loot, boolean tick) {
+		BlockActionContext action = new BlockActionContext(true, original, newType, tick);
 		action.loot = loot;
 		action.destroyedIblockdata = destroyed;
 		return action;
 	}
 
 	public static BlockActionContext destroyDripstone(Object iblockdata) {
-		BlockActionContext action = new BlockActionContext(true, Material.AIR);
+		BlockActionContext action = new BlockActionContext(true, Material.POINTED_DRIPSTONE, Material.AIR, true);
 		action.isDripstone = true;
 		action.iblockdata = iblockdata;
 		return action;
 	}
 
 	public static BlockActionContext updateState(Material newType) {
-		return new BlockActionContext(false, newType);
+		return new BlockActionContext(false, null, newType, false);
 	}
 
 	public static BlockActionContext updateState(Object iblockdata) {
-		BlockActionContext action = new BlockActionContext(false, null);
+		BlockActionContext action = new BlockActionContext(false, null, null, false);
 		action.iblockdata = iblockdata;
 		return action;
 	}
 
 	public static BlockActionContext updatePhysics() {
-		BlockActionContext action = new BlockActionContext(false, null);
-		action.updatePhysics = true;
-		return action;
+		return new BlockActionContext(false, null, null, true);
 	}
 
 	public BlockActionContext doUpdatePhysics() {
@@ -95,6 +97,20 @@ public class BlockActionContext {
 
 	public Material getType() {
 		return newType;
+	}
+
+	/**
+	 * @apiNote Non-null only if block is destroyed
+	 * @return Material
+	 */
+	@Nullable
+	public Material getOriginalType() {
+		return original;
+	}
+
+	public void processBreakingLootCheck(Position pos) {
+		if (loot != null && !loot.isEmpty() && pos.getBukkitType() != getOriginalType())
+			loot.clear();
 	}
 
 	public List<ItemStack> getLoot() {

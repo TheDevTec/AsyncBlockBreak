@@ -12,7 +12,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import me.devtec.asyncblockbreak.events.AsyncBlockBreakEvent;
 import me.devtec.asyncblockbreak.utils.BlockDestroyHandler;
 import me.devtec.shared.Ref;
 import me.devtec.shared.dataholder.Config;
@@ -29,11 +28,6 @@ public class Loader extends JavaPlugin implements Listener {
 	@EventHandler
 	public void quit(PlayerQuitEvent e) {
 		kick.remove(e.getPlayer().getUniqueId());
-	}
-
-	@EventHandler
-	public void onBreak(AsyncBlockBreakEvent e) {
-		e.setCancelled(true);
 	}
 
 	@Override
